@@ -1,0 +1,99 @@
+import { GameRoom } from './GameRoom';
+
+function generateRoomCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // No I or O to avoid confusion
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+export class RoomManager {
+  private rooms: Map<string, GameRoom> = new Map();
+  // Maps socket ID to { roomCode, playerId }
+  private socketToPlayer: Map<string, { roomCode: string; playerId: string }> = new Map();
+
+  createRoom(hostSocketId: string, hostName: string): { roomCode: string; playerId: string } {
+    let code: string;
+    do {
+      code = generateRoomCode();
+    } while (this.rooms.has(code));
+
+    const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const room = new GameRoom(code, playerId, hostName);
+    this.rooms.set(code, room);
+    this.socketToPlayer.set(hostSocketId, { roomCode: code, playerId });
+
+    return { roomCode: code, playerId };
+  }
+
+  joinRoom(
+    socketId: string,
+    roomCode: string,
+    playerName: string
+  ): { success: boolean; playerId?: string; error?: string } {
+    const room = this.rooms.get(roomCode.toUpperCase());
+    if (!room) return { success: false, error: 'Room not found' };
+    if (room.state.phase !== 'lobby') return { success: false, error: 'Game already in progress' };
+    if (room.state.players.length >= 7) return { success: false, error: 'Room is full (max 7 players)' };
+
+    const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const added = room.addPlayer(playerId, playerName);
+    if (!added) return { success: false, error: 'Could not join room' };
+
+    this.socketToPlayer.set(socketId, { roomCode: roomCode.toUpperCase(), playerId });
+    return { success: true, playerId };
+  }
+
+  rejoinRoom(
+    socketId: string,
+    roomCode: string,
+    playerId: string
+  ): { success: boolean; error?: string } {
+    const room = this.rooms.get(roomCode.toUpperCase());
+    if (!room) return { success: false, error: 'Room not found' };
+
+    const reconnected = room.reconnectPlayer(playerId);
+    if (!reconnected) return { success: false, error: 'Player not found in room' };
+
+    this.socketToPlayer.set(socketId, { roomCode: roomCode.toUpperCase(), playerId });
+    return { success: true };
+  }
+
+  getRoom(roomCode: string): GameRoom | undefined {
+    return this.rooms.get(roomCode.toUpperCase());
+  }
+
+  getPlayerInfo(socketId: string): { roomCode: string; playerId: string } | undefined {
+    return this.socketToPlayer.get(socketId);
+  }
+
+  handleDisconnect(socketId: string): { roomCode: string; playerId: string } | undefined {
+    const info = this.socketToPlayer.get(socketId);
+    if (!info) return undefined;
+
+    const room = this.rooms.get(info.roomCode);
+    if (room) {
+      room.disconnectPlayer(info.playerId);
+      // Clean up empty rooms
+      if (room.allDisconnected && room.state.phase === 'lobby') {
+        this.removeRoom(info.roomCode);
+      }
+    }
+
+    this.socketToPlayer.delete(socketId);
+    return info;
+  }
+
+  removeRoom(roomCode: string): void {
+    const room = this.rooms.get(roomCode);
+    if (room) {
+      // Clear all disconnect timers
+      for (const timer of room.disconnectTimers.values()) {
+        clearTimeout(timer);
+      }
+      this.rooms.delete(roomCode);
+    }
+  }
+}

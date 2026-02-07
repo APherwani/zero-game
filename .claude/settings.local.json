@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:socket.io)",
+      "Bash(npm install:*)"
+    ]
+  }
+}

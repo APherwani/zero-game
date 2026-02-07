@@ -1,65 +1,151 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSocket } from '@/hooks/useSocket';
+import { useGame } from '@/hooks/useGame';
 
 export default function Home() {
+  const router = useRouter();
+  const { socket, connected } = useSocket();
+  const { error, createRoom, joinRoom } = useGame(socket);
+  const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const [name, setName] = useState('');
+  const [roomCode, setRoomCode] = useState('');
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCreated = ({ roomCode, playerId }: { roomCode: string; playerId: string }) => {
+      localStorage.setItem('oh-hell-room', roomCode);
+      localStorage.setItem('oh-hell-player', playerId);
+      router.push(`/lobby/${roomCode}`);
+    };
+
+    const handleJoined = ({ roomCode, playerId }: { roomCode: string; playerId: string }) => {
+      localStorage.setItem('oh-hell-room', roomCode);
+      localStorage.setItem('oh-hell-player', playerId);
+      router.push(`/lobby/${roomCode}`);
+    };
+
+    socket.on('room-created', handleCreated);
+    socket.on('room-joined', handleJoined);
+
+    return () => {
+      socket.off('room-created', handleCreated);
+      socket.off('room-joined', handleJoined);
+    };
+  }, [socket, router]);
+
+  const handleCreate = () => {
+    if (!name.trim()) return;
+    createRoom(name.trim());
+  };
+
+  const handleJoin = () => {
+    if (!name.trim() || !roomCode.trim()) return;
+    joinRoom(roomCode.trim(), name.trim());
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col items-center justify-center px-4">
+      <div className="text-center mb-12">
+        <h1 className="text-6xl font-bold text-white mb-2">Oh Hell</h1>
+        <p className="text-green-300/70 text-lg">The trick-taking card game</p>
+      </div>
+
+      {!connected && (
+        <div className="text-yellow-400 mb-4 text-sm">Connecting to server...</div>
+      )}
+
+      {error && (
+        <div className="bg-red-900/80 text-red-200 px-4 py-2 rounded-lg mb-4 text-sm">
+          {error}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      )}
+
+      {mode === 'menu' && (
+        <div className="flex flex-col gap-4 w-full max-w-xs">
+          <button
+            onClick={() => setMode('create')}
+            disabled={!connected}
+            className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            Create Game
+          </button>
+          <button
+            onClick={() => setMode('join')}
+            disabled={!connected}
+            className="py-4 px-8 bg-white/10 text-white font-bold text-lg rounded-xl hover:bg-white/20 transition-colors border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Documentation
-          </a>
+            Join Game
+          </button>
         </div>
-      </main>
+      )}
+
+      {mode === 'create' && (
+        <div className="flex flex-col gap-4 w-full max-w-xs">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={20}
+            autoFocus
+            className="py-3 px-4 bg-white/10 text-white rounded-xl border border-white/20 placeholder-white/40 text-center text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+          />
+          <button
+            onClick={handleCreate}
+            disabled={!name.trim()}
+            className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Create Room
+          </button>
+          <button
+            onClick={() => setMode('menu')}
+            className="py-2 text-white/50 hover:text-white/80 transition-colors"
+          >
+            Back
+          </button>
+        </div>
+      )}
+
+      {mode === 'join' && (
+        <div className="flex flex-col gap-4 w-full max-w-xs">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={20}
+            autoFocus
+            className="py-3 px-4 bg-white/10 text-white rounded-xl border border-white/20 placeholder-white/40 text-center text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+          <input
+            type="text"
+            placeholder="Room code"
+            value={roomCode}
+            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+            maxLength={4}
+            className="py-3 px-4 bg-white/10 text-white rounded-xl border border-white/20 placeholder-white/40 text-center text-2xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+          />
+          <button
+            onClick={handleJoin}
+            disabled={!name.trim() || roomCode.length < 4}
+            className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Join Room
+          </button>
+          <button
+            onClick={() => setMode('menu')}
+            className="py-2 text-white/50 hover:text-white/80 transition-colors"
+          >
+            Back
+          </button>
+        </div>
+      )}
     </div>
   );
 }
