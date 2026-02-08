@@ -7,9 +7,10 @@ interface ScoreboardProps {
   scores: Record<string, number>;
   isGameOver: boolean;
   onContinue?: () => void;
+  onLeave: () => void;
 }
 
-export default function Scoreboard({ roundScores, scores, isGameOver, onContinue }: ScoreboardProps) {
+export default function Scoreboard({ roundScores, scores, isGameOver, onContinue, onLeave }: ScoreboardProps) {
   // Sort by total score descending
   const sorted = [...roundScores].sort((a, b) => b.totalScore - a.totalScore);
 
@@ -63,9 +64,26 @@ export default function Scoreboard({ roundScores, scores, isGameOver, onContinue
       )}
 
       {isGameOver && (
-        <p className="text-center text-yellow-400 font-semibold mt-4">
-          {sorted[0]?.playerName} wins!
-        </p>
+        <div className="mt-4 space-y-2">
+          <p className="text-center text-yellow-400 font-semibold">
+            {sorted[0]?.playerName} wins!
+          </p>
+          <button
+            onClick={onLeave}
+            className="w-full py-3 bg-yellow-500 text-black font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
+          >
+            New Game
+          </button>
+        </div>
+      )}
+
+      {!isGameOver && (
+        <button
+          onClick={onLeave}
+          className="w-full mt-2 py-2 bg-gray-700 text-white/70 text-sm font-medium rounded-lg hover:bg-gray-600 transition-colors"
+        >
+          Leave Room
+        </button>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 import { useGame } from '@/hooks/useGame';
@@ -42,6 +42,12 @@ export default function GamePage() {
   const isMyTurn = gameState.currentTurnIndex === gameState.myIndex;
   const isTrickRevealing = gameState.trickWinner !== null;
   const leadSuit = gameState.currentTrick.length > 0 ? gameState.currentTrick[0].card.suit : null;
+
+  const handleLeave = useCallback(() => {
+    localStorage.removeItem('oh-hell-room');
+    localStorage.removeItem('oh-hell-player');
+    router.push('/');
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col">
@@ -97,6 +103,7 @@ export default function GamePage() {
             scores={gameState.scores}
             isGameOver={gameState.phase === 'gameOver'}
             onContinue={gameState.phase === 'roundEnd' ? continueRound : undefined}
+            onLeave={handleLeave}
           />
         )}
       </div>
