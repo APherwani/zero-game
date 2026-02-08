@@ -6,11 +6,12 @@ interface ScoreboardProps {
   roundScores: RoundScore[];
   scores: Record<string, number>;
   isGameOver: boolean;
+  isHost?: boolean;
   onContinue?: () => void;
   onLeave: () => void;
 }
 
-export default function Scoreboard({ roundScores, scores, isGameOver, onContinue, onLeave }: ScoreboardProps) {
+export default function Scoreboard({ roundScores, scores, isGameOver, isHost, onContinue, onLeave }: ScoreboardProps) {
   // Sort by total score descending
   const sorted = [...roundScores].sort((a, b) => b.totalScore - a.totalScore);
 
@@ -61,6 +62,12 @@ export default function Scoreboard({ roundScores, scores, isGameOver, onContinue
         >
           Continue to Next Round
         </button>
+      )}
+
+      {!isGameOver && !isHost && (
+        <p className="w-full mt-4 py-3 text-white/50 text-sm text-center">
+          Waiting for host to continue...
+        </p>
       )}
 
       {isGameOver && (

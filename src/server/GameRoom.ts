@@ -27,7 +27,6 @@ export class GameRoom {
   roomId: string;
   state: GameState;
   disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
-  continueVotes: Set<string> = new Set();
   // Stores the next state to apply after trick reveal delay
   private pendingTrickResult: {
     winnerId: string;
@@ -167,7 +166,6 @@ export class GameRoom {
     this.state.trickWinner = null;
     this.state.completedTricks = [];
     this.state.roundScores = [];
-    this.continueVotes.clear();
 
     // Reset player round state
     for (const player of this.state.players) {
@@ -348,14 +346,11 @@ export class GameRoom {
 
   continueToNextRound(playerId: string): boolean {
     if (this.state.phase !== 'roundEnd') return false;
-    this.continueVotes.add(playerId);
+    if (playerId !== this.state.hostId) return false;
 
-    if (this.continueVotes.size >= this.state.players.filter((p) => p.connected).length) {
-      // Rotate dealer
-      this.state.dealerIndex = (this.state.dealerIndex + 1) % this.state.players.length;
-      this.startNextRound();
-      return true;
-    }
+    // Rotate dealer
+    this.state.dealerIndex = (this.state.dealerIndex + 1) % this.state.players.length;
+    this.startNextRound();
     return true;
   }
 
