@@ -66,7 +66,7 @@ export default function GamePage() {
         <div className={`text-center py-2 text-sm font-medium ${isTrickRevealing ? 'text-yellow-400' : isMyTurn ? 'text-yellow-400' : 'text-white/50'}`}>
           {isTrickRevealing
             ? `${gameState.players.find(p => p.id === gameState.trickWinner)?.name} wins the trick!`
-            : isMyTurn ? 'Your turn — select a card to play' : `Waiting for ${gameState.players[gameState.currentTurnIndex]?.name}...`}
+            : isMyTurn ? 'Your turn — swipe up to play' : `Waiting for ${gameState.players[gameState.currentTurnIndex]?.name}...`}
         </div>
       )}
 

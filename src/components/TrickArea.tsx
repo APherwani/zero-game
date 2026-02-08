@@ -19,8 +19,8 @@ export default function TrickArea({ currentTrick, players, myIndex, trickWinner 
     const relativePos = (playerIndex - myIndex + n) % n;
     // Place cards in a circle: 0 = bottom (me), going clockwise
     const angle = (relativePos / n) * 2 * Math.PI - Math.PI / 2;
-    const radiusX = 80;
-    const radiusY = 60;
+    const radiusX = 100;
+    const radiusY = 65;
     const x = Math.cos(angle) * radiusX;
     const y = Math.sin(angle) * radiusY;
     return {
@@ -32,7 +32,7 @@ export default function TrickArea({ currentTrick, players, myIndex, trickWinner 
   };
 
   return (
-    <div className="relative w-72 h-52 mx-auto">
+    <div className="relative w-80 h-60 mx-auto">
       {trickWinner && (
         <div className="absolute -top-8 left-0 right-0 text-center text-yellow-400 font-bold text-sm animate-pulse z-10">
           {players.find((p) => p.id === trickWinner)?.name} wins the trick!

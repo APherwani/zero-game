@@ -56,7 +56,7 @@ const SECTIONS = [
           After dealing, the top card of the remaining deck is flipped face-up. Its suit becomes the <strong>trump suit</strong> for that round.
         </p>
         <div className="flex items-center gap-4 bg-white/5 rounded-lg p-4">
-          <div className="w-16 h-22 bg-white rounded-lg flex items-center justify-center text-3xl shadow-lg">
+          <div className="w-20 h-28 bg-white rounded-lg flex items-center justify-center text-3xl shadow-lg">
             <span className="text-red-500">♥</span>
           </div>
           <div>
