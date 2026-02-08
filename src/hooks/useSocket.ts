@@ -45,9 +45,14 @@ export function useSocket() {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
 
-    // If already connected, set state
+    // If already connected, set state and request current game state
     if (socket.connected) {
       setConnected(true);
+      const roomCode = localStorage.getItem('oh-hell-room');
+      const playerId = localStorage.getItem('oh-hell-player');
+      if (roomCode && playerId) {
+        socket.emit('rejoin-room', { roomCode, playerId });
+      }
     }
 
     return () => {

@@ -16,9 +16,10 @@ interface HandProps {
 export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase }: HandProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  if (phase !== 'playing' || cards.length === 0) return null;
+  if ((phase !== 'playing' && phase !== 'bidding') || cards.length === 0) return null;
 
   const handleCardClick = (card: CardType) => {
+    if (phase !== 'playing') return;
     if (!isMyTurn) return;
     if (!isValidPlay(card, cards, leadSuit)) return;
 
@@ -34,13 +35,13 @@ export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase }: H
   return (
     <div className="flex justify-center items-end gap-1 flex-wrap px-2 pb-4">
       {cards.map((card) => {
-        const playable = isMyTurn && isValidPlay(card, cards, leadSuit);
+        const playable = phase === 'playing' && isMyTurn && isValidPlay(card, cards, leadSuit);
         return (
           <Card
             key={card.id}
             card={card}
             selected={selectedId === card.id}
-            disabled={!playable}
+            disabled={phase === 'bidding' ? false : !playable}
             onClick={() => handleCardClick(card)}
           />
         );

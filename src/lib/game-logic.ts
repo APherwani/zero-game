@@ -48,14 +48,9 @@ export function determineTrump(remaining: Card[]): Card | null {
 }
 
 export function getRoundSequence(numPlayers: number): number[] {
-  const maxCards = Math.floor(52 / numPlayers);
   const sequence: number[] = [];
-  // Go down from maxCards to 1
-  for (let i = maxCards; i >= 1; i--) {
-    sequence.push(i);
-  }
-  // Go back up from 2 to maxCards
-  for (let i = 2; i <= maxCards; i++) {
+  // Zero: number of rounds equals number of players, starting at n cards.
+  for (let i = numPlayers; i >= 1; i--) {
     sequence.push(i);
   }
   return sequence;

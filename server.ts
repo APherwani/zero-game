@@ -23,17 +23,13 @@ app.prepare().then(() => {
     const room = roomManager.getRoom(roomCode);
     if (!room) return;
 
-    // Send personalized state to each player
+    // Send personalized state to each player via direct socket lookup
     for (const player of room.state.players) {
-      const clientState = room.getClientState(player.id);
-      // Find sockets for this player
-      const sockets = io.sockets.sockets;
-      for (const [socketId, socket] of sockets) {
-        const info = roomManager.getPlayerInfo(socketId);
-        if (info && info.playerId === player.id) {
-          socket.emit('game-state', clientState);
-        }
-      }
+      const socketId = roomManager.getSocketId(player.id);
+      if (!socketId) continue;
+      const socket = io.sockets.sockets.get(socketId);
+      if (!socket) continue;
+      socket.emit('game-state', room.getClientState(player.id));
     }
   }
 

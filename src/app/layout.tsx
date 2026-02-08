@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Oh Hell",
-  description: "Real-time multiplayer Oh Hell card game",
+  title: "Zero Game",
+  description: "Real-time multiplayer Zero Game card game",
 };
 
 export const viewport: Viewport = {

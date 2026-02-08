@@ -13,6 +13,8 @@ export class RoomManager {
   private rooms: Map<string, GameRoom> = new Map();
   // Maps socket ID to { roomCode, playerId }
   private socketToPlayer: Map<string, { roomCode: string; playerId: string }> = new Map();
+  // Reverse map: playerId -> socketId for fast lookups
+  private playerToSocket: Map<string, string> = new Map();
 
   createRoom(hostSocketId: string, hostName: string): { roomCode: string; playerId: string } {
     let code: string;
@@ -24,6 +26,7 @@ export class RoomManager {
     const room = new GameRoom(code, playerId, hostName);
     this.rooms.set(code, room);
     this.socketToPlayer.set(hostSocketId, { roomCode: code, playerId });
+    this.playerToSocket.set(playerId, hostSocketId);
 
     return { roomCode: code, playerId };
   }
@@ -43,6 +46,7 @@ export class RoomManager {
     if (!added) return { success: false, error: 'Could not join room' };
 
     this.socketToPlayer.set(socketId, { roomCode: roomCode.toUpperCase(), playerId });
+    this.playerToSocket.set(playerId, socketId);
     return { success: true, playerId };
   }
 
@@ -58,6 +62,7 @@ export class RoomManager {
     if (!reconnected) return { success: false, error: 'Player not found in room' };
 
     this.socketToPlayer.set(socketId, { roomCode: roomCode.toUpperCase(), playerId });
+    this.playerToSocket.set(playerId, socketId);
     return { success: true };
   }
 
@@ -67,6 +72,10 @@ export class RoomManager {
 
   getPlayerInfo(socketId: string): { roomCode: string; playerId: string } | undefined {
     return this.socketToPlayer.get(socketId);
+  }
+
+  getSocketId(playerId: string): string | undefined {
+    return this.playerToSocket.get(playerId);
   }
 
   handleDisconnect(socketId: string): { roomCode: string; playerId: string } | undefined {
@@ -82,6 +91,7 @@ export class RoomManager {
       }
     }
 
+    this.playerToSocket.delete(info.playerId);
     this.socketToPlayer.delete(socketId);
     return info;
   }
