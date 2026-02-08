@@ -32,6 +32,11 @@ export interface RoundScore {
   totalScore: number;
 }
 
+export interface CompletedTrick {
+  cards: TrickCard[];
+  winnerId: string;
+}
+
 export interface GameState {
   roomId: string;
   players: Player[];
@@ -44,10 +49,12 @@ export interface GameState {
   trumpCard: Card | null;
   trumpSuit: Suit | null;
   currentTrick: TrickCard[];
+  trickWinner: string | null; // playerId of trick winner (set briefly after trick completes)
   trickNumber: number;
   leadPlayerIndex: number;
   scores: Record<string, number>; // playerId -> cumulative score
   roundScores: RoundScore[];
+  completedTricks: CompletedTrick[];
   roundSequence: number[];
   hostId: string;
 }
@@ -77,10 +84,12 @@ export interface ClientGameState {
   trumpCard: Card | null;
   trumpSuit: Suit | null;
   currentTrick: TrickCard[];
+  trickWinner: string | null;
   trickNumber: number;
   leadPlayerIndex: number;
   scores: Record<string, number>;
   roundScores: RoundScore[];
+  completedTricks: CompletedTrick[];
   hostId: string;
   myIndex: number;
 }

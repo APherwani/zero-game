@@ -51,7 +51,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col items-center justify-center px-4">
       <div className="text-center mb-12">
         <h1 className="text-6xl font-bold text-white mb-2">Zero Game</h1>
-        <p className="text-green-300/70 text-lg">Pherwani trick-taking card game</p>
+        <p className="text-green-300/70 text-lg">Pherwani fam card game</p>
       </div>
 
       {!connected && (

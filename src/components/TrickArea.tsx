@@ -7,9 +7,10 @@ interface TrickAreaProps {
   currentTrick: TrickCard[];
   players: ClientPlayer[];
   myIndex: number;
+  trickWinner: string | null;
 }
 
-export default function TrickArea({ currentTrick, players, myIndex }: TrickAreaProps) {
+export default function TrickArea({ currentTrick, players, myIndex, trickWinner }: TrickAreaProps) {
   // Arrange trick cards in a circle. Each player gets a position based on
   // their relative position to the current player.
   const n = players.length;
@@ -32,13 +33,21 @@ export default function TrickArea({ currentTrick, players, myIndex }: TrickAreaP
 
   return (
     <div className="relative w-72 h-52 mx-auto">
+      {trickWinner && (
+        <div className="absolute -top-8 left-0 right-0 text-center text-yellow-400 font-bold text-sm animate-pulse z-10">
+          {players.find((p) => p.id === trickWinner)?.name} wins the trick!
+        </div>
+      )}
       {currentTrick.map((tc) => {
         const playerIndex = players.findIndex((p) => p.id === tc.playerId);
         const player = players[playerIndex];
+        const isWinner = tc.playerId === trickWinner;
         return (
           <div key={tc.playerId} style={getStyle(playerIndex)} className="flex flex-col items-center gap-1">
-            <span className="text-xs text-white/80 font-medium whitespace-nowrap">{player?.name}</span>
-            <Card card={tc.card} small />
+            <span className={`text-xs font-medium whitespace-nowrap ${isWinner ? 'text-yellow-400' : 'text-white/80'}`}>{player?.name}</span>
+            <div className={isWinner ? 'ring-2 ring-yellow-400 rounded-lg' : ''}>
+              <Card card={tc.card} small />
+            </div>
           </div>
         );
       })}

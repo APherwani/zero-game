@@ -106,8 +106,16 @@ app.prepare().then(() => {
       const room = roomManager.getRoom(info.roomCode);
       if (!room) return;
 
-      const success = room.playCard(info.playerId, cardId);
-      if (success) {
+      const result = room.playCard(info.playerId, cardId);
+      if (result === 'trick-complete') {
+        // Broadcast with completed trick visible (includes trickWinner)
+        broadcastGameState(info.roomCode);
+        // After 2.5s, resolve the trick and broadcast the new state
+        setTimeout(() => {
+          room.resolveTrick();
+          broadcastGameState(info.roomCode);
+        }, 2500);
+      } else if (result) {
         broadcastGameState(info.roomCode);
       } else {
         socket.emit('error', { message: 'Invalid play' });

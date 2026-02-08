@@ -7,6 +7,7 @@ import {
   Card,
   TrickCard,
   RoundScore,
+  CompletedTrick,
 } from '../lib/types';
 import {
   createDeck,
@@ -27,6 +28,13 @@ export class GameRoom {
   state: GameState;
   disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
   continueVotes: Set<string> = new Set();
+  // Stores the next state to apply after trick reveal delay
+  private pendingTrickResult: {
+    winnerId: string;
+    nextTrickNumber: number;
+    nextLeadIndex: number;
+    isRoundOver: boolean;
+  } | null = null;
 
   constructor(roomId: string, hostId: string, hostName: string) {
     this.roomId = roomId;
@@ -51,10 +59,12 @@ export class GameRoom {
       trumpCard: null,
       trumpSuit: null,
       currentTrick: [],
+      trickWinner: null,
       trickNumber: 0,
       leadPlayerIndex: 0,
       scores: { [hostId]: 0 },
       roundScores: [],
+      completedTricks: [],
       roundSequence: [],
       hostId,
     };
@@ -154,6 +164,8 @@ export class GameRoom {
     this.state.cardsPerRound = this.state.roundSequence[this.state.roundNumber - 1];
     this.state.trickNumber = 0;
     this.state.currentTrick = [];
+    this.state.trickWinner = null;
+    this.state.completedTricks = [];
     this.state.roundScores = [];
     this.continueVotes.clear();
 
@@ -228,7 +240,7 @@ export class GameRoom {
     return true;
   }
 
-  playCard(playerId: string, cardId: string): boolean {
+  playCard(playerId: string, cardId: string): boolean | 'trick-complete' {
     if (this.state.phase !== 'playing') return false;
 
     const playerIndex = this.state.players.findIndex((p) => p.id === playerId);
@@ -254,23 +266,58 @@ export class GameRoom {
       const winner = this.state.players.find((p) => p.id === winnerId)!;
       winner.tricksWon++;
 
+      // Mark the trick winner — keep currentTrick intact for display
+      this.state.trickWinner = winnerId;
+
       // Check if round is over
       if (this.state.trickNumber >= this.state.cardsPerRound) {
-        this.endRound();
+        this.pendingTrickResult = {
+          winnerId,
+          nextTrickNumber: this.state.trickNumber,
+          nextLeadIndex: 0,
+          isRoundOver: true,
+        };
       } else {
-        // Start next trick
-        this.state.trickNumber++;
         const winnerIndex = this.state.players.findIndex((p) => p.id === winnerId);
-        this.state.leadPlayerIndex = winnerIndex;
-        this.state.currentTurnIndex = winnerIndex;
-        this.state.currentTrick = [];
+        this.pendingTrickResult = {
+          winnerId,
+          nextTrickNumber: this.state.trickNumber + 1,
+          nextLeadIndex: winnerIndex,
+          isRoundOver: false,
+        };
       }
+
+      return 'trick-complete';
     } else {
       // Next player's turn
       this.state.currentTurnIndex = (this.state.currentTurnIndex + 1) % this.state.players.length;
     }
 
     return true;
+  }
+
+  /** Called after the trick reveal delay to advance to the next trick or end the round. */
+  resolveTrick(): void {
+    if (!this.pendingTrickResult) return;
+    const { nextTrickNumber, nextLeadIndex, isRoundOver } = this.pendingTrickResult;
+    this.pendingTrickResult = null;
+    this.state.trickWinner = null;
+    // Save the completed trick before clearing
+    this.state.completedTricks.push({
+      cards: [...this.state.currentTrick],
+      winnerId: this.state.currentTrick.length > 0
+        ? determineTrickWinner(this.state.currentTrick, this.state.trumpSuit)
+        : '',
+    });
+    this.state.currentTrick = [];
+
+    if (isRoundOver) {
+      this.endRound();
+    } else {
+      this.state.trickNumber = nextTrickNumber;
+      this.state.leadPlayerIndex = nextLeadIndex;
+      this.state.currentTurnIndex = nextLeadIndex;
+    }
   }
 
   private endRound(): void {
@@ -341,10 +388,12 @@ export class GameRoom {
       trumpCard: this.state.trumpCard,
       trumpSuit: this.state.trumpSuit,
       currentTrick: this.state.currentTrick,
+      trickWinner: this.state.trickWinner,
       trickNumber: this.state.trickNumber,
       leadPlayerIndex: this.state.leadPlayerIndex,
       scores: this.state.scores,
       roundScores: this.state.roundScores,
+      completedTricks: this.state.completedTricks,
       hostId: this.state.hostId,
       myIndex,
     };

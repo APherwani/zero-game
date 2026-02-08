@@ -9,6 +9,7 @@ import PlayerList from '@/components/PlayerList';
 import TrickArea from '@/components/TrickArea';
 import BiddingPanel from '@/components/BiddingPanel';
 import Hand from '@/components/Hand';
+import TrickPile from '@/components/TrickPile';
 import Scoreboard from '@/components/Scoreboard';
 
 export default function GamePage() {
@@ -39,6 +40,7 @@ export default function GamePage() {
   }
 
   const isMyTurn = gameState.currentTurnIndex === gameState.myIndex;
+  const isTrickRevealing = gameState.trickWinner !== null;
   const leadSuit = gameState.currentTrick.length > 0 ? gameState.currentTrick[0].card.suit : null;
 
   return (
@@ -55,8 +57,10 @@ export default function GamePage() {
 
       {/* Turn indicator */}
       {gameState.phase === 'playing' && (
-        <div className={`text-center py-2 text-sm font-medium ${isMyTurn ? 'text-yellow-400' : 'text-white/50'}`}>
-          {isMyTurn ? 'Your turn — select a card to play' : `Waiting for ${gameState.players[gameState.currentTurnIndex]?.name}...`}
+        <div className={`text-center py-2 text-sm font-medium ${isTrickRevealing ? 'text-yellow-400' : isMyTurn ? 'text-yellow-400' : 'text-white/50'}`}>
+          {isTrickRevealing
+            ? `${gameState.players.find(p => p.id === gameState.trickWinner)?.name} wins the trick!`
+            : isMyTurn ? 'Your turn — select a card to play' : `Waiting for ${gameState.players[gameState.currentTurnIndex]?.name}...`}
         </div>
       )}
 
@@ -76,6 +80,14 @@ export default function GamePage() {
             currentTrick={gameState.currentTrick}
             players={gameState.players}
             myIndex={gameState.myIndex}
+            trickWinner={gameState.trickWinner}
+          />
+        )}
+
+        {gameState.phase === 'playing' && gameState.completedTricks.length > 0 && (
+          <TrickPile
+            completedTricks={gameState.completedTricks}
+            players={gameState.players}
           />
         )}
 
@@ -110,7 +122,7 @@ export default function GamePage() {
       <div className="pb-safe">
         <Hand
           cards={gameState.hand}
-          isMyTurn={isMyTurn}
+          isMyTurn={isMyTurn && !isTrickRevealing}
           leadSuit={leadSuit}
           onPlayCard={playCard}
           phase={gameState.phase}
