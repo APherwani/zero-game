@@ -102,7 +102,8 @@ export default function GamePage() {
             roundScores={gameState.roundScores}
             scores={gameState.scores}
             isGameOver={gameState.phase === 'gameOver'}
-            onContinue={gameState.phase === 'roundEnd' ? continueRound : undefined}
+            isHost={gameState.playerId === gameState.hostId}
+            onContinue={gameState.phase === 'roundEnd' && gameState.playerId === gameState.hostId ? continueRound : undefined}
             onLeave={handleLeave}
           />
         )}

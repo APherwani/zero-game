@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useSocket } from '@/hooks/useSocket';
 import { useGame } from '@/hooks/useGame';
 
@@ -80,6 +81,12 @@ export default function Home() {
           >
             Join Game
           </button>
+          <Link
+            href="/tutorial"
+            className="py-3 px-8 text-white/50 hover:text-white/80 transition-colors text-center text-sm"
+          >
+            How to Play
+          </Link>
         </div>
       )}
 
