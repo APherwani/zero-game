@@ -29,6 +29,12 @@ export default function GamePage() {
     }
   }, [gameState, connected, roomCode, router]);
 
+  const handleLeave = useCallback(() => {
+    localStorage.removeItem('oh-hell-room');
+    localStorage.removeItem('oh-hell-player');
+    router.push('/');
+  }, [router]);
+
   if (!gameState) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex items-center justify-center">
@@ -42,12 +48,6 @@ export default function GamePage() {
   const isMyTurn = gameState.currentTurnIndex === gameState.myIndex;
   const isTrickRevealing = gameState.trickWinner !== null;
   const leadSuit = gameState.currentTrick.length > 0 ? gameState.currentTrick[0].card.suit : null;
-
-  const handleLeave = useCallback(() => {
-    localStorage.removeItem('oh-hell-room');
-    localStorage.removeItem('oh-hell-player');
-    router.push('/');
-  }, [router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col">
