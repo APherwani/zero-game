@@ -1,14 +1,53 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Socket } from 'socket.io-client';
 import type { ClientGameState, ClientToServerEvents, ServerToClientEvents } from '@/lib/types';
+import type { SoundManager } from '@/lib/sounds';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-export function useGame(socket: GameSocket | null) {
+export function useGame(socket: GameSocket | null, sound?: SoundManager) {
   const [gameState, setGameState] = useState<ClientGameState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const prevRef = useRef<{ isMyTurn: boolean; trickWinner: string | null; phase: string | null }>({
+    isMyTurn: false,
+    trickWinner: null,
+    phase: null,
+  });
+
+  useEffect(() => {
+    if (!gameState) return;
+
+    const isMyTurn =
+      (gameState.phase === 'bidding' || gameState.phase === 'playing') &&
+      gameState.currentTurnIndex === gameState.myIndex;
+    const prev = prevRef.current;
+
+    if (isMyTurn && !prev.isMyTurn) {
+      navigator.vibrate?.(100);
+      sound?.yourTurn();
+    }
+
+    if (
+      gameState.trickWinner &&
+      gameState.trickWinner === gameState.playerId &&
+      prev.trickWinner !== gameState.trickWinner
+    ) {
+      navigator.vibrate?.(50);
+      sound?.trickWon();
+    }
+
+    if (gameState.phase !== prev.phase) {
+      if (gameState.phase === 'roundEnd') {
+        sound?.roundEnd();
+      } else if (gameState.phase === 'gameOver') {
+        sound?.gameOver();
+      }
+    }
+
+    prevRef.current = { isMyTurn, trickWinner: gameState.trickWinner, phase: gameState.phase };
+  }, [gameState, sound]);
 
   useEffect(() => {
     if (!socket) return;

@@ -2,14 +2,16 @@
 
 import { useState } from 'react';
 import type { ClientGameState } from '@/lib/types';
+import type { SoundManager } from '@/lib/sounds';
 import { getBlockedBid } from '@/lib/game-logic';
 
 interface BiddingPanelProps {
   gameState: ClientGameState;
   onPlaceBid: (bid: number) => void;
+  sound?: SoundManager;
 }
 
-export default function BiddingPanel({ gameState, onPlaceBid }: BiddingPanelProps) {
+export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPanelProps) {
   const [selectedBid, setSelectedBid] = useState<number | null>(null);
   const isMyTurn = gameState.currentTurnIndex === gameState.myIndex;
   const isDealer = gameState.dealerIndex === gameState.myIndex;
@@ -22,6 +24,7 @@ export default function BiddingPanel({ gameState, onPlaceBid }: BiddingPanelProp
 
   const handleSubmit = () => {
     if (selectedBid !== null) {
+      sound?.bidPlaced();
       onPlaceBid(selectedBid);
       setSelectedBid(null);
     }

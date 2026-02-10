@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Card as CardType, Suit } from '@/lib/types';
+import type { SoundManager } from '@/lib/sounds';
 import { isValidPlay } from '@/lib/game-logic';
 import Card from './Card';
 
@@ -11,6 +12,7 @@ interface HandProps {
   leadSuit: Suit | null;
   onPlayCard: (cardId: string) => void;
   phase: string;
+  sound?: SoundManager;
 }
 
 interface DragState {
@@ -21,7 +23,7 @@ interface DragState {
 
 const SWIPE_THRESHOLD = 50;
 
-export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase }: HandProps) {
+export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps) {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -57,6 +59,7 @@ export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase }: H
 
     const dragDistance = dragState.startY - dragState.currentY;
     if (dragDistance > SWIPE_THRESHOLD) {
+      sound?.playCard();
       onPlayCard(card.id);
     }
     setDragState(null);
@@ -65,8 +68,9 @@ export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase }: H
   const handleClick = useCallback((card: CardType) => {
     if (phase !== 'playing' || !isMyTurn) return;
     if (!isValidPlay(card, cards, leadSuit)) return;
+    sound?.playCard();
     onPlayCard(card.id);
-  }, [phase, isMyTurn, cards, leadSuit, onPlayCard]);
+  }, [phase, isMyTurn, cards, leadSuit, onPlayCard, sound]);
 
   if ((phase !== 'playing' && phase !== 'bidding') || cards.length === 0) return null;
 
