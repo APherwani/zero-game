@@ -25,7 +25,7 @@ export default function Card({ card, faceDown, selected, disabled, small, onClic
   if (faceDown) {
     return (
       <div
-        className={`${small ? 'w-16 h-22' : 'w-20 h-28'} rounded-lg bg-blue-700 border-2 border-blue-900 shadow-md flex items-center justify-center`}
+        className={`${small ? 'w-16 h-[5.5rem]' : 'w-20 h-28'} rounded-lg bg-blue-700 border-2 border-blue-900 shadow-md flex items-center justify-center`}
       >
         <div className={`${small ? 'w-10 h-14' : 'w-14 h-20'} rounded border border-blue-500 bg-blue-600`} />
       </div>
@@ -37,7 +37,7 @@ export default function Card({ card, faceDown, selected, disabled, small, onClic
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       className={`
-        ${small ? 'w-16 h-22 text-sm p-1' : 'w-20 h-28 text-base p-1.5'}
+        ${small ? 'w-16 h-[5.5rem] text-sm p-1' : 'w-20 h-28 text-base p-1.5'}
         rounded-lg bg-white border-2 shadow-md
         flex flex-col items-center justify-between
         transition-all duration-150 select-none
