@@ -1,6 +1,7 @@
 'use client';
 
 import type { RoundScore } from '@/lib/types';
+import AnimatedNumber from './AnimatedNumber';
 
 interface ScoreboardProps {
   roundScores: RoundScore[];
@@ -34,21 +35,33 @@ export default function Scoreboard({ roundScores, scores, isGameOver, isHost, on
         <tbody>
           {sorted.map((rs, i) => {
             const gotBid = rs.bid === rs.tricksWon;
+            const rowDelay = i * 200;
             return (
               <tr
                 key={rs.playerId}
-                className={`border-b border-gray-700/50 ${gotBid ? 'bg-green-900/30' : ''}`}
+                className={`border-b border-gray-700/50 ${gotBid ? 'animate-score-hit' : 'animate-score-miss'}`}
+                style={{ animationDelay: `${rowDelay}ms` }}
               >
                 <td className="py-2 px-1 font-medium">
-                  {isGameOver && i === 0 && '🏆 '}
+                  {isGameOver && i === 0 && '\u{1F3C6} '}
                   {rs.playerName}
                 </td>
                 <td className="text-center py-2 px-1">{rs.bid}</td>
                 <td className="text-center py-2 px-1">{rs.tricksWon}</td>
-                <td className={`text-center py-2 px-1 font-bold ${gotBid ? 'text-green-400' : 'text-red-400'}`}>
-                  {gotBid ? `+${rs.roundScore}` : '0'}
+                <td className="text-center py-2 px-1 font-bold">
+                  <AnimatedNumber
+                    value={rs.roundScore}
+                    delay={rowDelay}
+                    prefix={gotBid ? '+' : ''}
+                    className={gotBid ? 'text-green-400' : 'text-red-400'}
+                  />
                 </td>
-                <td className="text-center py-2 px-1 font-bold">{rs.totalScore}</td>
+                <td className="text-center py-2 px-1 font-bold">
+                  <AnimatedNumber
+                    value={rs.totalScore}
+                    delay={rowDelay}
+                  />
+                </td>
               </tr>
             );
           })}

@@ -25,3 +25,24 @@ body {
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Scoreboard row animations */
+@keyframes score-glow-green {
+  0% { background-color: transparent; }
+  30% { background-color: rgba(34, 197, 94, 0.3); box-shadow: 0 0 12px rgba(34, 197, 94, 0.4); }
+  100% { background-color: rgba(34, 197, 94, 0.1); box-shadow: none; }
+}
+
+@keyframes score-flash-red {
+  0% { background-color: transparent; }
+  30% { background-color: rgba(239, 68, 68, 0.3); box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+  100% { background-color: transparent; box-shadow: none; }
+}
+
+.animate-score-hit {
+  animation: score-glow-green 1.2s ease-out forwards;
+}
+
+.animate-score-miss {
+  animation: score-flash-red 1.2s ease-out forwards;
+}
