@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 import { useGame } from '@/hooks/useGame';
@@ -19,9 +19,17 @@ export default function LobbyPage() {
     }
   }, [gameState, roomCode, router]);
 
+  const [copied, setCopied] = useState(false);
+
   const isHost = gameState?.hostId === gameState?.playerId;
   const playerCount = gameState?.players.length || 0;
   const canStart = isHost && playerCount >= 3;
+
+  function copyRoomCode() {
+    navigator.clipboard.writeText(roomCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col items-center justify-center px-4">
@@ -30,8 +38,21 @@ export default function LobbyPage() {
 
         <div className="text-center mb-6">
           <p className="text-white/50 text-sm mb-1">Room Code</p>
-          <p className="text-4xl font-mono font-bold text-yellow-400 tracking-widest">{roomCode}</p>
-          <p className="text-white/40 text-xs mt-1">Share this code with other players</p>
+          <button
+            onClick={copyRoomCode}
+            className="group cursor-pointer"
+          >
+            <p className="text-4xl font-mono font-bold text-yellow-400 tracking-widest group-hover:text-yellow-300 transition-colors">
+              {roomCode}
+            </p>
+            <p className="text-white/40 text-xs mt-1">
+              {copied ? (
+                <span className="text-green-400 animate-pulse">Copied!</span>
+              ) : (
+                'Tap to copy'
+              )}
+            </p>
+          </button>
         </div>
 
         {error && (
