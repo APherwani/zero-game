@@ -11,6 +11,7 @@ export interface Player {
   id: string;
   name: string;
   connected: boolean;
+  isBot: boolean;
   hand: Card[];
   bid: number | null;
   tricksWon: number;
@@ -26,6 +27,7 @@ export interface TrickCard {
 export interface RoundScore {
   playerId: string;
   playerName: string;
+  isBot: boolean;
   bid: number;
   tricksWon: number;
   roundScore: number;
@@ -63,6 +65,7 @@ export interface ClientPlayer {
   id: string;
   name: string;
   connected: boolean;
+  isBot: boolean;
   cardCount: number;
   bid: number | null;
   tricksWon: number;
@@ -103,6 +106,8 @@ export interface ClientToServerEvents {
   'place-bid': (data: { bid: number }) => void;
   'play-card': (data: { cardId: string }) => void;
   'continue-round': () => void;
+  'add-bot': () => void;
+  'remove-bot': (data: { botId: string }) => void;
 }
 
 export interface ServerToClientEvents {

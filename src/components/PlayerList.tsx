@@ -25,13 +25,14 @@ export default function PlayerList({ players, myIndex, phase }: PlayerListProps)
             flex flex-col items-center gap-0.5
             transition-all
             ${p.isCurrentTurn ? 'bg-yellow-500/30 ring-2 ring-yellow-400' : 'bg-gray-800/60'}
-            ${!p.connected ? 'opacity-40' : ''}
+            ${!p.isBot && !p.connected ? 'opacity-40' : ''}
           `}
         >
           <div className="flex items-center gap-1">
+            {p.isBot && <span className="text-[10px]">{'\u{1F916}'}</span>}
             <span className="text-white font-semibold">{p.name}</span>
             {p.isDealer && <span className="text-yellow-400 text-[10px]">D</span>}
-            {!p.connected && <span className="text-red-400 text-[10px]">●</span>}
+            {!p.isBot && !p.connected && <span className="text-red-400 text-[10px]">●</span>}
           </div>
           {phase !== 'lobby' && (
             <div className="flex gap-2 text-white/60">

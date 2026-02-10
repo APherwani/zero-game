@@ -10,7 +10,7 @@ export default function LobbyPage() {
   const router = useRouter();
   const roomCode = params.roomCode as string;
   const { socket, connected } = useSocket();
-  const { gameState, error, startGame } = useGame(socket);
+  const { gameState, error, startGame, addBot, removeBot } = useGame(socket);
 
   // Redirect to game page when game starts
   useEffect(() => {
@@ -72,17 +72,37 @@ export default function LobbyPage() {
                 className="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3"
               >
                 <div className="flex items-center gap-2">
+                  {p.isBot && <span className="text-sm">{'\u{1F916}'}</span>}
                   <span className="text-white font-medium">{p.name}</span>
                   {p.id === gameState.hostId && (
                     <span className="text-yellow-400 text-xs bg-yellow-400/10 px-2 py-0.5 rounded">Host</span>
                   )}
                 </div>
-                <span className="text-green-400 text-xs">
-                  {p.connected ? 'Connected' : 'Disconnected'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-400 text-xs">
+                    {p.isBot ? 'Bot' : p.connected ? 'Connected' : 'Disconnected'}
+                  </span>
+                  {isHost && p.isBot && (
+                    <button
+                      onClick={() => removeBot(p.id)}
+                      className="text-red-400 hover:text-red-300 text-xs font-bold ml-1"
+                      title="Remove bot"
+                    >
+                      {'\u2715'}
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
+          {isHost && playerCount < 7 && (
+            <button
+              onClick={addBot}
+              className="w-full mt-2 py-2 bg-blue-600/50 text-blue-200 font-medium text-sm rounded-lg hover:bg-blue-600/70 transition-colors border border-blue-500/30"
+            >
+              + Add Bot
+            </button>
+          )}
         </div>
 
         {!connected && (

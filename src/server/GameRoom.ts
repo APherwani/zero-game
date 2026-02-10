@@ -45,6 +45,7 @@ export class GameRoom {
           id: hostId,
           name: hostName,
           connected: true,
+          isBot: false,
           hand: [],
           bid: null,
           tricksWon: 0,
@@ -79,11 +80,40 @@ export class GameRoom {
       id: playerId,
       name: playerName,
       connected: true,
+      isBot: false,
       hand: [],
       bid: null,
       tricksWon: 0,
     });
     this.state.scores[playerId] = 0;
+    return true;
+  }
+
+  addBot(botName: string): string | null {
+    if (this.state.phase !== 'lobby') return null;
+    if (this.state.players.length >= 7) return null;
+
+    const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.state.players.push({
+      id: botId,
+      name: botName,
+      connected: true,
+      isBot: true,
+      hand: [],
+      bid: null,
+      tricksWon: 0,
+    });
+    this.state.scores[botId] = 0;
+    return botId;
+  }
+
+  removeBot(botId: string): boolean {
+    if (this.state.phase !== 'lobby') return false;
+    const player = this.state.players.find(p => p.id === botId);
+    if (!player || !player.isBot) return false;
+
+    this.state.players = this.state.players.filter(p => p.id !== botId);
+    delete this.state.scores[botId];
     return true;
   }
 
@@ -102,7 +132,7 @@ export class GameRoom {
 
   disconnectPlayer(playerId: string): void {
     const player = this.state.players.find((p) => p.id === playerId);
-    if (!player) return;
+    if (!player || player.isBot) return;
     player.connected = false;
 
     if (this.state.phase === 'lobby') {
@@ -345,6 +375,7 @@ export class GameRoom {
       roundScoreEntries.push({
         playerId: player.id,
         playerName: player.name,
+        isBot: player.isBot,
         bid: player.bid!,
         tricksWon: player.tricksWon,
         roundScore: rs,
@@ -378,6 +409,7 @@ export class GameRoom {
       id: p.id,
       name: p.name,
       connected: p.connected,
+      isBot: p.isBot,
       cardCount: p.hand.length,
       bid: p.bid,
       tricksWon: p.tricksWon,
@@ -412,14 +444,22 @@ export class GameRoom {
 
   transferHost(): boolean {
     const nextHost = this.state.players.find(
-      (p) => p.id !== this.state.hostId && p.connected
+      (p) => p.id !== this.state.hostId && p.connected && !p.isBot
     );
     if (!nextHost) return false;
     this.state.hostId = nextHost.id;
     return true;
   }
 
+  isCurrentTurnBot(): boolean {
+    return this.state.players[this.state.currentTurnIndex]?.isBot === true;
+  }
+
+  getCurrentTurnPlayer(): Player | undefined {
+    return this.state.players[this.state.currentTurnIndex];
+  }
+
   get allDisconnected(): boolean {
-    return this.state.players.every((p) => !p.connected);
+    return this.state.players.every((p) => p.isBot || !p.connected);
   }
 }
