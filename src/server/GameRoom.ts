@@ -27,6 +27,7 @@ export class GameRoom {
   roomId: string;
   state: GameState;
   disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+  lastAllDisconnectedAt: number | null = null;
   // Stores the next state to apply after trick reveal delay
   private pendingTrickResult: {
     winnerId: string;
@@ -90,6 +91,7 @@ export class GameRoom {
     const player = this.state.players.find((p) => p.id === playerId);
     if (!player) return false;
     player.connected = true;
+    this.lastAllDisconnectedAt = null;
     const timer = this.disconnectTimers.get(playerId);
     if (timer) {
       clearTimeout(timer);
@@ -117,6 +119,11 @@ export class GameRoom {
     // Transfer host if disconnecting player is the host during roundEnd
     if (playerId === this.state.hostId && this.state.phase === 'roundEnd') {
       this.transferHost();
+    }
+
+    // Track when all players become disconnected
+    if (this.allDisconnected) {
+      this.lastAllDisconnectedAt = Date.now();
     }
 
     // Start 60s grace period

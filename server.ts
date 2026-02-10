@@ -19,6 +19,12 @@ app.prepare().then(() => {
 
   const roomManager = new RoomManager();
 
+  function sanitizeName(name: string): string {
+    return name.replace(/[<>]/g, '').trim().slice(0, 20);
+  }
+
+  const ROOM_CODE_RE = /^[A-Z]{4}$/;
+
   function broadcastGameState(roomCode: string) {
     const room = roomManager.getRoom(roomCode);
     if (!room) return;
@@ -37,14 +43,28 @@ app.prepare().then(() => {
     console.log(`Socket connected: ${socket.id}`);
 
     socket.on('create-room', ({ playerName }) => {
-      const { roomCode, playerId } = roomManager.createRoom(socket.id, playerName);
+      const name = sanitizeName(playerName);
+      if (!name) {
+        socket.emit('error', { message: 'Name cannot be empty' });
+        return;
+      }
+      const { roomCode, playerId } = roomManager.createRoom(socket.id, name);
       socket.join(roomCode);
       socket.emit('room-created', { roomCode, playerId });
       broadcastGameState(roomCode);
     });
 
     socket.on('join-room', ({ roomCode, playerName }) => {
-      const result = roomManager.joinRoom(socket.id, roomCode, playerName);
+      const name = sanitizeName(playerName);
+      if (!name) {
+        socket.emit('error', { message: 'Name cannot be empty' });
+        return;
+      }
+      if (!ROOM_CODE_RE.test(roomCode.toUpperCase())) {
+        socket.emit('error', { message: 'Invalid room code' });
+        return;
+      }
+      const result = roomManager.joinRoom(socket.id, roomCode, name);
       if (result.success) {
         socket.join(roomCode.toUpperCase());
         socket.emit('room-joined', { roomCode: roomCode.toUpperCase(), playerId: result.playerId! });
@@ -55,6 +75,10 @@ app.prepare().then(() => {
     });
 
     socket.on('rejoin-room', ({ roomCode, playerId }) => {
+      if (!ROOM_CODE_RE.test(roomCode.toUpperCase())) {
+        socket.emit('error', { message: 'Invalid room code' });
+        return;
+      }
       const result = roomManager.rejoinRoom(socket.id, roomCode, playerId);
       if (result.success) {
         socket.join(roomCode.toUpperCase());
@@ -141,6 +165,11 @@ app.prepare().then(() => {
       }
     });
   });
+
+  // Clean up stale rooms every 5 minutes
+  setInterval(() => {
+    roomManager.cleanupStaleRooms();
+  }, 5 * 60 * 1000);
 
   const port = process.env.PORT || 3000;
   httpServer.listen(port, () => {
