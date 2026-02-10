@@ -107,7 +107,16 @@ export class GameRoom {
       // Remove from lobby immediately
       this.state.players = this.state.players.filter((p) => p.id !== playerId);
       delete this.state.scores[playerId];
+      // Transfer host if the disconnecting player was the host
+      if (playerId === this.state.hostId) {
+        this.transferHost();
+      }
       return;
+    }
+
+    // Transfer host if disconnecting player is the host during roundEnd
+    if (playerId === this.state.hostId && this.state.phase === 'roundEnd') {
+      this.transferHost();
     }
 
     // Start 60s grace period
@@ -392,6 +401,15 @@ export class GameRoom {
       hostId: this.state.hostId,
       myIndex,
     };
+  }
+
+  transferHost(): boolean {
+    const nextHost = this.state.players.find(
+      (p) => p.id !== this.state.hostId && p.connected
+    );
+    if (!nextHost) return false;
+    this.state.hostId = nextHost.id;
+    return true;
   }
 
   get allDisconnected(): boolean {
