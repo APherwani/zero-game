@@ -6,9 +6,11 @@ import TrumpDisplay from './TrumpDisplay';
 
 interface GameHeaderProps {
   gameState: ClientGameState;
+  muted?: boolean;
+  onToggleMute?: () => void;
 }
 
-export default function GameHeader({ gameState }: GameHeaderProps) {
+export default function GameHeader({ gameState, muted, onToggleMute }: GameHeaderProps) {
   const [copied, setCopied] = useState(false);
 
   function copyRoomCode() {
@@ -19,10 +21,21 @@ export default function GameHeader({ gameState }: GameHeaderProps) {
 
   return (
     <div className="flex items-center justify-between px-4 py-2 bg-gray-900/70">
-      <div className="text-white text-sm">
-        <span className="font-semibold">Round {gameState.roundNumber}</span>
-        <span className="text-white/50"> / {gameState.totalRounds}</span>
-        <span className="text-white/40 ml-2">({gameState.cardsPerRound} cards)</span>
+      <div className="flex items-center gap-2">
+        <div className="text-white text-sm">
+          <span className="font-semibold">Round {gameState.roundNumber}</span>
+          <span className="text-white/50"> / {gameState.totalRounds}</span>
+          <span className="text-white/40 ml-2">({gameState.cardsPerRound} cards)</span>
+        </div>
+        {onToggleMute && (
+          <button
+            onClick={onToggleMute}
+            className="text-white/40 hover:text-white/70 transition-colors text-lg leading-none"
+            title={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? '\u{1F507}' : '\u{1F50A}'}
+          </button>
+        )}
       </div>
 
       <TrumpDisplay trumpCard={gameState.trumpCard} />

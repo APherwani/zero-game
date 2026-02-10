@@ -4,6 +4,7 @@ import { useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 import { useGame } from '@/hooks/useGame';
+import { useSound } from '@/hooks/useSound';
 import GameHeader from '@/components/GameHeader';
 import PlayerList from '@/components/PlayerList';
 import TrickArea from '@/components/TrickArea';
@@ -17,7 +18,8 @@ export default function GamePage() {
   const router = useRouter();
   const roomCode = params.roomCode as string;
   const { socket, connected } = useSocket();
-  const { gameState, error, placeBid, playCard, continueRound } = useGame(socket);
+  const { sound, muted, toggleMute } = useSound();
+  const { gameState, error, placeBid, playCard, continueRound } = useGame(socket, sound);
 
   // If no game state and not connected, redirect home
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function GamePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col">
       {/* Header */}
-      <GameHeader gameState={gameState} />
+      <GameHeader gameState={gameState} muted={muted} onToggleMute={toggleMute} />
 
       {/* Error toast */}
       {error && (
@@ -78,7 +80,7 @@ export default function GamePage() {
       {/* Center area */}
       <div className="flex-1 flex flex-col items-center justify-center px-4">
         {gameState.phase === 'bidding' && (
-          <BiddingPanel gameState={gameState} onPlaceBid={placeBid} />
+          <BiddingPanel gameState={gameState} onPlaceBid={placeBid} sound={sound} />
         )}
 
         {gameState.phase === 'playing' && (
@@ -134,6 +136,7 @@ export default function GamePage() {
           leadSuit={leadSuit}
           onPlayCard={playCard}
           phase={gameState.phase}
+          sound={sound}
         />
       </div>
     </div>
