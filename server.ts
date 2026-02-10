@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import next from 'next';
 import { Server } from 'socket.io';
 import { RoomManager } from './src/server/RoomManager';
+import { decideBid, decideCard, getNextBotName } from './src/server/BotBrain';
 import type { ClientToServerEvents, ServerToClientEvents } from './src/lib/types';
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -37,6 +38,48 @@ app.prepare().then(() => {
       if (!socket) continue;
       socket.emit('game-state', room.getClientState(player.id));
     }
+  }
+
+  function scheduleBotTurn(roomCode: string) {
+    const room = roomManager.getRoom(roomCode);
+    if (!room) return;
+    if (room.state.phase !== 'bidding' && room.state.phase !== 'playing') return;
+    if (!room.isCurrentTurnBot()) return;
+
+    const botPlayer = room.getCurrentTurnPlayer();
+    if (!botPlayer) return;
+    const expectedBotId = botPlayer.id;
+
+    const delay = 1000 + Math.random() * 1000;
+    setTimeout(() => {
+      const r = roomManager.getRoom(roomCode);
+      if (!r || !r.isCurrentTurnBot()) return;
+      const bot = r.getCurrentTurnPlayer();
+      if (!bot || bot.id !== expectedBotId) return;
+
+      if (r.state.phase === 'bidding') {
+        const bid = decideBid(bot, r.state);
+        r.placeBid(bot.id, bid);
+        broadcastGameState(roomCode);
+        scheduleBotTurn(roomCode);
+      } else if (r.state.phase === 'playing') {
+        const cardId = decideCard(bot, r.state);
+        const result = r.playCard(bot.id, cardId);
+        if (result === 'trick-complete') {
+          broadcastGameState(roomCode);
+          setTimeout(() => {
+            const r2 = roomManager.getRoom(roomCode);
+            if (!r2) return;
+            r2.resolveTrick();
+            broadcastGameState(roomCode);
+            scheduleBotTurn(roomCode);
+          }, 2500);
+        } else if (result) {
+          broadcastGameState(roomCode);
+          scheduleBotTurn(roomCode);
+        }
+      }
+    }, delay);
   }
 
   io.on('connection', (socket) => {
@@ -84,6 +127,7 @@ app.prepare().then(() => {
         socket.join(roomCode.toUpperCase());
         socket.emit('room-joined', { roomCode: roomCode.toUpperCase(), playerId });
         broadcastGameState(roomCode.toUpperCase());
+        scheduleBotTurn(roomCode.toUpperCase());
       } else {
         socket.emit('error', { message: result.error! });
       }
@@ -103,6 +147,7 @@ app.prepare().then(() => {
       const started = room.startGame();
       if (started) {
         broadcastGameState(info.roomCode);
+        scheduleBotTurn(info.roomCode);
       } else {
         socket.emit('error', { message: 'Need at least 3 players to start' });
       }
@@ -118,6 +163,7 @@ app.prepare().then(() => {
       const success = room.placeBid(info.playerId, bid);
       if (success) {
         broadcastGameState(info.roomCode);
+        scheduleBotTurn(info.roomCode);
       } else {
         socket.emit('error', { message: 'Invalid bid' });
       }
@@ -138,9 +184,11 @@ app.prepare().then(() => {
         setTimeout(() => {
           room.resolveTrick();
           broadcastGameState(info.roomCode);
+          scheduleBotTurn(info.roomCode);
         }, 2500);
       } else if (result) {
         broadcastGameState(info.roomCode);
+        scheduleBotTurn(info.roomCode);
       } else {
         socket.emit('error', { message: 'Invalid play' });
       }
@@ -155,6 +203,47 @@ app.prepare().then(() => {
 
       room.continueToNextRound(info.playerId);
       broadcastGameState(info.roomCode);
+      scheduleBotTurn(info.roomCode);
+    });
+
+    socket.on('add-bot', () => {
+      const info = roomManager.getPlayerInfo(socket.id);
+      if (!info) return;
+
+      const room = roomManager.getRoom(info.roomCode);
+      if (!room) return;
+      if (room.state.hostId !== info.playerId) {
+        socket.emit('error', { message: 'Only the host can add bots' });
+        return;
+      }
+
+      const existingNames = room.state.players.map(p => p.name);
+      const botName = getNextBotName(existingNames);
+      const botId = room.addBot(botName);
+      if (botId) {
+        broadcastGameState(info.roomCode);
+      } else {
+        socket.emit('error', { message: 'Cannot add bot (room full or game started)' });
+      }
+    });
+
+    socket.on('remove-bot', ({ botId }) => {
+      const info = roomManager.getPlayerInfo(socket.id);
+      if (!info) return;
+
+      const room = roomManager.getRoom(info.roomCode);
+      if (!room) return;
+      if (room.state.hostId !== info.playerId) {
+        socket.emit('error', { message: 'Only the host can remove bots' });
+        return;
+      }
+
+      const removed = room.removeBot(botId);
+      if (removed) {
+        broadcastGameState(info.roomCode);
+      } else {
+        socket.emit('error', { message: 'Could not remove bot' });
+      }
     });
 
     socket.on('disconnect', () => {

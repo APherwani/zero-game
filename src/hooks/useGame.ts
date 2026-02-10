@@ -113,6 +113,19 @@ export function useGame(socket: GameSocket | null, sound?: SoundManager) {
     socket.emit('continue-round');
   }, [socket]);
 
+  const addBot = useCallback(() => {
+    if (!socket) return;
+    socket.emit('add-bot');
+  }, [socket]);
+
+  const removeBot = useCallback(
+    (botId: string) => {
+      if (!socket) return;
+      socket.emit('remove-bot', { botId });
+    },
+    [socket]
+  );
+
   return {
     gameState,
     error,
@@ -122,5 +135,7 @@ export function useGame(socket: GameSocket | null, sound?: SoundManager) {
     placeBid,
     playCard,
     continueRound,
+    addBot,
+    removeBot,
   };
 }
