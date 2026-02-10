@@ -142,6 +142,11 @@ app.prepare().then(() => {
     });
   });
 
+  // Clean up stale rooms every 5 minutes
+  setInterval(() => {
+    roomManager.cleanupStaleRooms();
+  }, 5 * 60 * 1000);
+
   const port = process.env.PORT || 3000;
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);

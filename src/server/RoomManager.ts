@@ -85,8 +85,8 @@ export class RoomManager {
     const room = this.rooms.get(info.roomCode);
     if (room) {
       room.disconnectPlayer(info.playerId);
-      // Clean up empty rooms
-      if (room.allDisconnected && room.state.phase === 'lobby') {
+      // Clean up rooms where all players have disconnected
+      if (room.allDisconnected) {
         this.removeRoom(info.roomCode);
       }
     }
@@ -94,6 +94,25 @@ export class RoomManager {
     this.playerToSocket.delete(info.playerId);
     this.socketToPlayer.delete(socketId);
     return info;
+  }
+
+  cleanupStaleRooms(): void {
+    const now = Date.now();
+    const TEN_MINUTES = 10 * 60 * 1000;
+
+    for (const [roomCode, room] of this.rooms) {
+      const shouldRemove =
+        // All players disconnected for more than 10 minutes
+        (room.allDisconnected &&
+          room.lastAllDisconnectedAt !== null &&
+          now - room.lastAllDisconnectedAt > TEN_MINUTES) ||
+        // Game over with no connected players
+        (room.state.phase === 'gameOver' && room.allDisconnected);
+
+      if (shouldRemove) {
+        this.removeRoom(roomCode);
+      }
+    }
   }
 
   removeRoom(roomCode: string): void {
