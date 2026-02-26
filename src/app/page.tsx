@@ -1,64 +1,80 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useSocket } from '@/hooks/useSocket';
-import { useGame } from '@/hooks/useGame';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import { useGameSocket } from '@/hooks/useGameSocket';
+import type { ServerMessage } from '@/lib/ws-protocol';
 
 const ROOM_CODE_LENGTH = 4;
 
 function HomeContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { socket, connected } = useSocket();
-  const { error, createRoom, joinRoom } = useGame(socket);
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
 
-  // Pre-fill room code from invite link (?join=XXXX)
+  // Only connect WebSocket when we have a room code to connect to
+  const { send, subscribe, connected } = useWebSocket(pendingRoomCode || undefined);
+  const { error, createRoom, joinRoom } = useGameSocket(send, subscribe);
+
+  // Track pending action to execute once WebSocket connects
+  const [pendingAction, setPendingAction] = useState<{ type: 'create' | 'join'; name: string; roomCode?: string } | null>(null);
+
+  // Listen for room-created and room-joined events
   useEffect(() => {
-    const joinCode = searchParams.get('join');
-    if (joinCode) {
-      setRoomCode(joinCode.toUpperCase().slice(0, ROOM_CODE_LENGTH));
-      setMode('join');
+    const unsubscribe = subscribe((msg: ServerMessage) => {
+      if (msg.type === 'room-created') {
+        localStorage.setItem('zero-game-room', msg.payload.roomCode);
+        localStorage.setItem('zero-game-player', msg.payload.playerId);
+        router.push(`/lobby/${msg.payload.roomCode}`);
+      } else if (msg.type === 'room-joined') {
+        localStorage.setItem('zero-game-room', msg.payload.roomCode);
+        localStorage.setItem('zero-game-player', msg.payload.playerId);
+        router.push(`/lobby/${msg.payload.roomCode}`);
+      }
+    });
+    return unsubscribe;
+  }, [subscribe, router]);
+
+  // When connected and we have a pending action, execute it
+  useEffect(() => {
+    if (connected && pendingAction) {
+      if (pendingAction.type === 'create') {
+        createRoom(pendingAction.name);
+      } else if (pendingAction.type === 'join' && pendingAction.roomCode) {
+        joinRoom(pendingAction.roomCode, pendingAction.name);
+      }
+      setPendingAction(null);
     }
-  }, [searchParams]);
+  }, [connected, pendingAction, createRoom, joinRoom]);
 
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleCreated = ({ roomCode, playerId }: { roomCode: string; playerId: string }) => {
-      localStorage.setItem('oh-hell-room', roomCode);
-      localStorage.setItem('oh-hell-player', playerId);
-      router.push(`/lobby/${roomCode}`);
-    };
-
-    const handleJoined = ({ roomCode, playerId }: { roomCode: string; playerId: string }) => {
-      localStorage.setItem('oh-hell-room', roomCode);
-      localStorage.setItem('oh-hell-player', playerId);
-      router.push(`/lobby/${roomCode}`);
-    };
-
-    socket.on('room-created', handleCreated);
-    socket.on('room-joined', handleJoined);
-
-    return () => {
-      socket.off('room-created', handleCreated);
-      socket.off('room-joined', handleJoined);
-    };
-  }, [socket, router]);
-
-  const handleCreate = () => {
+  const handleCreate = useCallback(async () => {
     if (!name.trim()) return;
-    createRoom(name.trim());
-  };
+    try {
+      const res = await fetch('/api/rooms', { method: 'POST' });
+      const data = await res.json();
+      const code = data.roomCode as string;
+      setPendingAction({ type: 'create', name: name.trim() });
+      setPendingRoomCode(code);
+    } catch {
+      // If REST call fails, generate code client-side as fallback
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      let code = '';
+      for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+      setPendingAction({ type: 'create', name: name.trim() });
+      setPendingRoomCode(code);
+    }
+  }, [name]);
 
-  const handleJoin = () => {
+  const handleJoin = useCallback(() => {
     if (!name.trim() || !roomCode.trim()) return;
-    joinRoom(roomCode.trim(), name.trim());
-  };
+    const code = roomCode.trim().toUpperCase();
+    setPendingAction({ type: 'join', name: name.trim(), roomCode: code });
+    setPendingRoomCode(code);
+  }, [name, roomCode]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col items-center justify-center px-4">
@@ -66,10 +82,6 @@ function HomeContent() {
         <h1 className="text-6xl font-bold text-white mb-2">Zero Game</h1>
         <p className="text-green-300/70 text-lg">Pherwani fam card game</p>
       </div>
-
-      {!connected && (
-        <div className="text-yellow-400 mb-4 text-sm">Connecting to server...</div>
-      )}
 
       {error && (
         <div className="bg-red-900/80 text-red-200 px-4 py-2 rounded-lg mb-4 text-sm">
@@ -81,15 +93,13 @@ function HomeContent() {
         <div className="flex flex-col gap-4 w-full max-w-xs">
           <button
             onClick={() => setMode('create')}
-            disabled={!connected}
-            className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors"
           >
             Create Game
           </button>
           <button
             onClick={() => setMode('join')}
-            disabled={!connected}
-            className="py-4 px-8 bg-white/10 text-white font-bold text-lg rounded-xl hover:bg-white/20 transition-colors border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-4 px-8 bg-white/10 text-white font-bold text-lg rounded-xl hover:bg-white/20 transition-colors border border-white/20"
           >
             Join Game
           </button>
