@@ -176,7 +176,12 @@ export class GameRoomDO extends DurableObject<Env> {
     }
 
     // Cancel stale room alarm
-    this.ctx.storage.deleteAlarm();
+    try {
+      this.ctx.storage.deleteAlarm();
+    } catch (err) {
+      // Ignore alarm deletion errors; absence or failure to clear the alarm
+      // should not prevent a player from rejoining the room.
+    }
 
     this.setPlayerSocket(payload.playerId, ws);
     this.send(ws, {
