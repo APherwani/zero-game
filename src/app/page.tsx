@@ -15,6 +15,7 @@ function HomeContent() {
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
+  const [fallbackWarning, setFallbackWarning] = useState<string | null>(null);
 
   // Only connect WebSocket when we have a room code to connect to
   const { send, subscribe, connected } = useWebSocket(pendingRoomCode || undefined);
@@ -57,10 +58,13 @@ function HomeContent() {
       const res = await fetch('/api/rooms', { method: 'POST' });
       const data = await res.json();
       const code = data.roomCode as string;
+      setFallbackWarning(null);
       setPendingAction({ type: 'create', name: name.trim() });
       setPendingRoomCode(code);
-    } catch {
+    } catch (err) {
       // If REST call fails, generate code client-side as fallback
+      console.error('Failed to fetch room code from API, using client-side fallback:', err);
+      setFallbackWarning('Could not reach server — using offline room code. Connectivity issues may affect gameplay.');
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
       let code = '';
       for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
@@ -86,6 +90,12 @@ function HomeContent() {
       {error && (
         <div className="bg-red-900/80 text-red-200 px-4 py-2 rounded-lg mb-4 text-sm">
           {error}
+        </div>
+      )}
+
+      {fallbackWarning && (
+        <div className="bg-yellow-900/80 text-yellow-200 px-4 py-2 rounded-lg mb-4 text-sm">
+          ⚠️ {fallbackWarning}
         </div>
       )}
 
