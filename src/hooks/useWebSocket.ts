@@ -13,7 +13,12 @@ let reconnectDelay = 1000;
 let currentRoomCode: string | null = null;
 
 function connectToRoom(roomCode: string) {
-  if (globalWs && globalWs.readyState === WebSocket.OPEN) return;
+  if (globalWs && globalWs.readyState === WebSocket.OPEN) {
+    if (currentRoomCode === roomCode) return;
+    globalWs.close(1000, 'Switching rooms');
+    globalWs = null;
+    globalConnected = false;
+  }
   if (globalWs && globalWs.readyState === WebSocket.CONNECTING) return;
 
   currentRoomCode = roomCode;
@@ -22,10 +27,10 @@ function connectToRoom(roomCode: string) {
 
   ws.onopen = () => {
     globalConnected = true;
-    reconnectDelay = 1000; // reset backoff
-    // Notify all hook instances
+    reconnectDelay = 1000;
+    // Notify all hook instances to update connection state
     for (const listener of globalListeners) {
-      listener({ type: 'error', payload: { message: '' } }); // trigger re-render via state update
+      listener({ type: 'error', payload: { message: '' } });
     }
   };
 
@@ -65,7 +70,7 @@ export function useWebSocket(roomCode?: string) {
   useEffect(() => {
     // Internal listener to track connection state changes
     const handler: MessageHandler = () => {
-      setConnected(globalConnected);
+      setConnected(globalWs?.readyState === WebSocket.OPEN);
     };
 
     listenerRef.current = handler;
@@ -76,7 +81,6 @@ export function useWebSocket(roomCode?: string) {
       connectToRoom(roomCode);
     }
 
-    // Check connection state
     setConnected(globalConnected);
 
     return () => {
@@ -92,7 +96,7 @@ export function useWebSocket(roomCode?: string) {
       setConnected(globalWs?.readyState === WebSocket.OPEN);
     }, 500);
     return () => clearInterval(interval);
-  }, []);
+  }, [connected]);
 
   const send = useCallback((msg: ClientMessage) => {
     if (globalWs?.readyState === WebSocket.OPEN) {

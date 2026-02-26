@@ -45,38 +45,42 @@ export class GameRoomDO extends DurableObject<Env> {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
-    this.ctx.acceptWebSocket(server);
+    // Use standard WebSocket API (NOT Hibernation API) so the DO stays
+    // alive in memory for the duration of the game. The Hibernation API
+    // (ctx.acceptWebSocket) evicts the DO between messages, destroying
+    // all in-memory state (connections map, game state, timers).
+    server.accept();
+
+    server.addEventListener('message', (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(event.data as string) as ClientMessage;
+        switch (msg.type) {
+          case 'create-room': return this.handleCreateRoom(server, msg.payload);
+          case 'join-room': return this.handleJoinRoom(server, msg.payload);
+          case 'rejoin-room': return this.handleRejoinRoom(server, msg.payload);
+          case 'start-game': return this.handleStartGame(server);
+          case 'place-bid': return this.handlePlaceBid(server, msg.payload);
+          case 'play-card': return this.handlePlayCard(server, msg.payload);
+          case 'continue-round': return this.handleContinueRound(server);
+          case 'add-bot': return this.handleAddBot(server);
+          case 'remove-bot': return this.handleRemoveBot(server, msg.payload);
+          case 'chat': return this.handleChat(server, msg.payload);
+          case 'report': return this.handleReport(server, msg.payload);
+        }
+      } catch {
+        this.sendError(server, 'Invalid message');
+      }
+    });
+
+    server.addEventListener('close', () => {
+      this.handleDisconnect(server);
+    });
+
+    server.addEventListener('error', () => {
+      this.handleDisconnect(server);
+    });
 
     return new Response(null, { status: 101, webSocket: client });
-  }
-
-  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    try {
-      const msg = JSON.parse(message as string) as ClientMessage;
-      switch (msg.type) {
-        case 'create-room': return this.handleCreateRoom(ws, msg.payload);
-        case 'join-room': return this.handleJoinRoom(ws, msg.payload);
-        case 'rejoin-room': return this.handleRejoinRoom(ws, msg.payload);
-        case 'start-game': return this.handleStartGame(ws);
-        case 'place-bid': return this.handlePlaceBid(ws, msg.payload);
-        case 'play-card': return this.handlePlayCard(ws, msg.payload);
-        case 'continue-round': return this.handleContinueRound(ws);
-        case 'add-bot': return this.handleAddBot(ws);
-        case 'remove-bot': return this.handleRemoveBot(ws, msg.payload);
-        case 'chat': return this.handleChat(ws, msg.payload);
-        case 'report': return this.handleReport(ws, msg.payload);
-      }
-    } catch {
-      this.sendError(ws, 'Invalid message');
-    }
-  }
-
-  async webSocketClose(ws: WebSocket): Promise<void> {
-    this.handleDisconnect(ws);
-  }
-
-  async webSocketError(ws: WebSocket): Promise<void> {
-    this.handleDisconnect(ws);
   }
 
   // ── Alarm (stale room cleanup) ─────────────────────────────────────
@@ -100,7 +104,6 @@ export class GameRoomDO extends DurableObject<Env> {
       return;
     }
 
-    // Extract room code from the DO name (set by the worker when routing)
     const roomCode = this.getRoomCode();
     const playerId = generatePlayerId();
 
@@ -390,7 +393,7 @@ export class GameRoomDO extends DurableObject<Env> {
     this.broadcastGameState();
   }
 
-  // ── Game logic (ported from GameRoom.ts) ───────────────────────────
+  // ── Game logic ─────────────────────────────────────────────────────
 
   private initState(roomId: string, hostId: string, hostName: string): void {
     this.state = {
@@ -784,7 +787,6 @@ export class GameRoomDO extends DurableObject<Env> {
   }
 
   private getRoomCode(): string {
-    // Room code is extracted from the WebSocket URL in fetch()
     return this.roomCode || this.state?.roomId || 'UNKNOWN';
   }
 
