@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 import { useGame } from '@/hooks/useGame';
+import RoomQRCode from '@/components/RoomQRCode';
 
 export default function LobbyPage() {
   const params = useParams();
@@ -53,6 +54,7 @@ export default function LobbyPage() {
               )}
             </p>
           </button>
+          <RoomQRCode roomCode={roomCode} />
         </div>
 
         {error && (
