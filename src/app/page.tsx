@@ -1,18 +1,28 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSocket } from '@/hooks/useSocket';
 import { useGame } from '@/hooks/useGame';
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { socket, connected } = useSocket();
   const { error, createRoom, joinRoom } = useGame(socket);
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+
+  // Pre-fill room code and switch to join mode when ?join=XXXX is in the URL
+  useEffect(() => {
+    const joinCode = searchParams.get('join');
+    if (joinCode && joinCode.length === 4) {
+      setRoomCode(joinCode.toUpperCase());
+      setMode('join');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!socket) return;
