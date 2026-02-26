@@ -38,7 +38,9 @@ export default function GamePage() {
     if (!gameState && !connected) {
       const storedRoom = localStorage.getItem('zero-game-room');
       if (!storedRoom || storedRoom !== roomCode) {
-        console.warn('[Game] No game state and no stored room — redirecting home');
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[Game] No game state and no stored room — redirecting home');
+        }
         router.push('/');
       }
     }
