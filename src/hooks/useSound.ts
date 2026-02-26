@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { SoundManager } from '@/lib/sounds';
 
-const MUTE_KEY = 'oh-hell-muted';
+const MUTE_KEY = 'zero-game-muted';
 
 let sharedManager: SoundManager | null = null;
 

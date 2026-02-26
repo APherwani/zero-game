@@ -2,8 +2,8 @@
 
 import { useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useSocket } from '@/hooks/useSocket';
-import { useGame } from '@/hooks/useGame';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import { useGameSocket } from '@/hooks/useGameSocket';
 import { useSound } from '@/hooks/useSound';
 import GameHeader from '@/components/GameHeader';
 import PlayerList from '@/components/PlayerList';
@@ -17,14 +17,26 @@ export default function GamePage() {
   const params = useParams();
   const router = useRouter();
   const roomCode = params.roomCode as string;
-  const { socket, connected } = useSocket();
+
+  const { send, subscribe, connected, disconnect } = useWebSocket(roomCode);
   const { sound, muted, toggleMute } = useSound();
-  const { gameState, error, placeBid, playCard, continueRound } = useGame(socket, sound);
+  const { gameState, error, placeBid, playCard, continueRound, rejoinRoom } = useGameSocket(send, subscribe, sound);
+
+  // On mount, try to rejoin if we have stored session
+  useEffect(() => {
+    if (connected) {
+      const storedRoom = localStorage.getItem('zero-game-room');
+      const storedPlayer = localStorage.getItem('zero-game-player');
+      if (storedRoom === roomCode && storedPlayer) {
+        rejoinRoom(roomCode, storedPlayer);
+      }
+    }
+  }, [connected, roomCode, rejoinRoom]);
 
   // If no game state and not connected, redirect home
   useEffect(() => {
     if (!gameState && !connected) {
-      const storedRoom = localStorage.getItem('oh-hell-room');
+      const storedRoom = localStorage.getItem('zero-game-room');
       if (!storedRoom || storedRoom !== roomCode) {
         router.push('/');
       }
@@ -32,10 +44,11 @@ export default function GamePage() {
   }, [gameState, connected, roomCode, router]);
 
   const handleLeave = useCallback(() => {
-    localStorage.removeItem('oh-hell-room');
-    localStorage.removeItem('oh-hell-player');
+    localStorage.removeItem('zero-game-room');
+    localStorage.removeItem('zero-game-player');
+    disconnect();
     router.push('/');
-  }, [router]);
+  }, [router, disconnect]);
 
   if (!gameState) {
     return (
