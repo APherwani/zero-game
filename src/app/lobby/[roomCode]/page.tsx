@@ -32,6 +32,7 @@ export default function LobbyPage() {
   }, [gameState, roomCode, router]);
 
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const isHost = gameState?.hostId === gameState?.playerId;
   const playerCount = gameState?.players.length || 0;
@@ -41,6 +42,13 @@ export default function LobbyPage() {
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  function copyInviteLink() {
+    const link = `${window.location.origin}/?join=${roomCode}`;
+    navigator.clipboard.writeText(link);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 1500);
   }
 
   return (
@@ -64,6 +72,16 @@ export default function LobbyPage() {
                 'Tap to copy'
               )}
             </p>
+          </button>
+          <button
+            onClick={copyInviteLink}
+            className="mt-3 px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-xs rounded-lg transition-colors border border-white/10"
+          >
+            {linkCopied ? (
+              <span className="text-green-400">Link copied!</span>
+            ) : (
+              '🔗 Copy invite link'
+            )}
           </button>
         </div>
 

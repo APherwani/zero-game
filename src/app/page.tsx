@@ -7,7 +7,9 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import type { ServerMessage } from '@/lib/ws-protocol';
 
-export default function Home() {
+const ROOM_CODE_LENGTH = 4;
+
+function HomeContent() {
   const router = useRouter();
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
   const [name, setName] = useState('');
@@ -154,13 +156,13 @@ export default function Home() {
             placeholder="Room code"
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            maxLength={4}
+            maxLength={ROOM_CODE_LENGTH}
             className="py-3 px-4 bg-white/10 text-white rounded-xl border border-white/20 placeholder-white/40 text-center text-2xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-yellow-400"
             onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
           />
           <button
             onClick={handleJoin}
-            disabled={!name.trim() || roomCode.length < 4}
+            disabled={!name.trim() || roomCode.length < ROOM_CODE_LENGTH}
             className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Join Room
@@ -174,5 +176,13 @@ export default function Home() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
   );
 }
