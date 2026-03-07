@@ -73,6 +73,12 @@ export interface ClientPlayer {
   isCurrentTurn: boolean;
 }
 
+export interface VoiceTrack {
+  playerId: string;
+  sessionId: string;
+  trackName: string;
+}
+
 export interface ClientGameState {
   roomId: string;
   playerId: string;
@@ -95,6 +101,7 @@ export interface ClientGameState {
   completedTricks: CompletedTrick[];
   hostId: string;
   myIndex: number;
+  voiceTracks: VoiceTrack[];
 }
 
 // WebSocket message types are defined in ws-protocol.ts

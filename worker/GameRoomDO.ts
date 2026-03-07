@@ -17,6 +17,7 @@ export class GameRoomDO extends DurableObject<Env> {
   private connections: Map<string, WebSocket> = new Map(); // playerId -> WebSocket
   private disconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private deadlineTimers: Map<string, ReturnType<typeof setTimeout>> = new Map(); // 5-min rejoin deadline
+  private voiceTracks: Map<string, { sessionId: string; trackName: string }> = new Map();
   private botTurnTimer: ReturnType<typeof setTimeout> | null = null;
   private trickResolveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingTrickResult: {
@@ -69,6 +70,8 @@ export class GameRoomDO extends DurableObject<Env> {
           case 'remove-bot': return this.handleRemoveBot(server, msg.payload);
           case 'chat': return this.handleChat(server, msg.payload);
           case 'report': return this.handleReport(server, msg.payload);
+          case 'voice-track': return this.handleVoiceTrack(server, msg.payload);
+          case 'voice-leave': return this.handleVoiceLeave(server);
         }
       } catch {
         this.sendError(server, 'Invalid message');
@@ -366,6 +369,20 @@ export class GameRoomDO extends DurableObject<Env> {
     // No-op for now — reports require D1 persistence (can be re-added later)
   }
 
+  private handleVoiceTrack(ws: WebSocket, payload: { sessionId: string; trackName: string }): void {
+    const playerId = this.getPlayerIdForSocket(ws);
+    if (!playerId) return;
+    this.voiceTracks.set(playerId, { sessionId: payload.sessionId, trackName: payload.trackName });
+    this.broadcastGameState();
+  }
+
+  private handleVoiceLeave(ws: WebSocket): void {
+    const playerId = this.getPlayerIdForSocket(ws);
+    if (!playerId) return;
+    this.voiceTracks.delete(playerId);
+    this.broadcastGameState();
+  }
+
   private handleDisconnect(ws: WebSocket): void {
     const playerId = this.getPlayerIdForSocket(ws);
     if (!playerId) return;
@@ -376,6 +393,7 @@ export class GameRoomDO extends DurableObject<Env> {
     if (!player || player.isBot) return;
 
     player.connected = false;
+    this.voiceTracks.delete(playerId);
 
     if (this.state.phase === 'lobby') {
       // Remove from lobby immediately
@@ -815,6 +833,7 @@ export class GameRoomDO extends DurableObject<Env> {
       completedTricks: this.state.completedTricks,
       hostId: this.state.hostId,
       myIndex,
+      voiceTracks: [...this.voiceTracks.entries()].map(([pid, t]) => ({ playerId: pid, ...t })),
     };
   }
 

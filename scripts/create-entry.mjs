@@ -78,6 +78,75 @@ export default {
       return Response.json({ roomCode: generateRoomCode() }, { headers: corsHeaders() });
     }
 
+    // ── Cloudflare Calls API proxy ──────────────────────────────────
+    if (url.pathname.startsWith("/api/calls/") && request.method === "POST") {
+      const appId = env.CF_SFU_APP_ID;
+      const appToken = env.CF_SFU_APP_TOKEN;
+      if (!appId || !appToken) {
+        return Response.json({ error: "Calls not configured" }, { status: 503, headers: corsHeaders() });
+      }
+      const cfBase = \`https://rtc.live.cloudflare.com/v1/apps/\${appId}\`;
+      const cfHeaders = {
+        "Authorization": \`Bearer \${appToken}\`,
+        "Content-Type": "application/json",
+      };
+
+      // POST /api/calls/session → create a new CF Calls session
+      if (url.pathname === "/api/calls/session") {
+        const cfRes = await fetch(\`\${cfBase}/sessions/new\`, { method: "POST", headers: cfHeaders });
+        const data = await cfRes.json();
+        return Response.json(
+          { sessionId: data.sessionId, sdp: data.sessionDescription?.sdp },
+          { headers: corsHeaders() }
+        );
+      }
+
+      // POST /api/calls/publish → push local track, get trackName
+      if (url.pathname === "/api/calls/publish") {
+        const body = await request.json();
+        const cfRes = await fetch(\`\${cfBase}/sessions/\${body.sessionId}/tracks/new\`, {
+          method: "POST",
+          headers: cfHeaders,
+          body: JSON.stringify({
+            sessionDescription: { type: "answer", sdp: body.sdp },
+            tracks: [{ location: "local", mid: body.mid, trackName: "audio" }],
+          }),
+        });
+        const data = await cfRes.json();
+        const trackName = data.tracks?.[0]?.trackName ?? "audio";
+        return Response.json({ trackName }, { headers: corsHeaders() });
+      }
+
+      // POST /api/calls/subscribe → pull remote tracks, get new SDP offer
+      if (url.pathname === "/api/calls/subscribe") {
+        const body = await request.json();
+        const cfRes = await fetch(\`\${cfBase}/sessions/\${body.sessionId}/tracks/new\`, {
+          method: "POST",
+          headers: cfHeaders,
+          body: JSON.stringify({
+            tracks: body.remoteTracks.map((t) => ({
+              location: "remote",
+              sessionId: t.sessionId,
+              trackName: t.trackName,
+            })),
+          }),
+        });
+        const data = await cfRes.json();
+        return Response.json({ sdp: data.sessionDescription?.sdp }, { headers: corsHeaders() });
+      }
+
+      // POST /api/calls/renegotiate → send SDP answer after subscription
+      if (url.pathname === "/api/calls/renegotiate") {
+        const body = await request.json();
+        await fetch(\`\${cfBase}/sessions/\${body.sessionId}/renegotiate\`, {
+          method: "PUT",
+          headers: cfHeaders,
+          body: JSON.stringify({ sessionDescription: { type: "answer", sdp: body.sdp } }),
+        });
+        return new Response(null, { status: 204, headers: corsHeaders() });
+      }
+    }
+
     // ── Everything else: Next.js via OpenNext ───────────────────────
     return openNextWorker.fetch(request, env, ctx);
   },

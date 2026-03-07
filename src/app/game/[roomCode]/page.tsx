@@ -12,6 +12,7 @@ import BiddingPanel from '@/components/BiddingPanel';
 import Hand from '@/components/Hand';
 import TrickPile from '@/components/TrickPile';
 import Scoreboard from '@/components/Scoreboard';
+import VoiceChat from '@/components/VoiceChat';
 
 export default function GamePage() {
   const params = useParams();
@@ -19,6 +20,7 @@ export default function GamePage() {
   const roomCode = params.roomCode as string;
 
   const { send, subscribe, connected, disconnect } = useWebSocket(roomCode);
+
   const { sound, muted, toggleMute } = useSound();
   const { gameState, error, placeBid, playCard, continueRound, rejoinRoom } = useGameSocket(send, subscribe, sound);
 
@@ -89,8 +91,13 @@ export default function GamePage() {
       )}
 
       {/* Other players */}
-      <div className="pt-2 pb-2">
+      <div className="pt-2 pb-1">
         <PlayerList players={gameState.players} myIndex={gameState.myIndex} phase={gameState.phase} />
+      </div>
+
+      {/* Voice chat */}
+      <div className="pb-2 px-4">
+        <VoiceChat gameState={gameState} send={send} />
       </div>
 
       {/* Center area */}

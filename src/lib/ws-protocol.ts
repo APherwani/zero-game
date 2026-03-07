@@ -13,7 +13,9 @@ export type ClientMessage =
   | { type: 'add-bot' }
   | { type: 'remove-bot'; payload: { botId: string } }
   | { type: 'chat'; payload: { text: string } }
-  | { type: 'report'; payload: { messageId: string; reason: string } };
+  | { type: 'report'; payload: { messageId: string; reason: string } }
+  | { type: 'voice-track'; payload: { sessionId: string; trackName: string } }
+  | { type: 'voice-leave' };
 
 // ── Server → Client ─────────────────────────────────────────────────
 

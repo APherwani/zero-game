@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useGameSocket } from '@/hooks/useGameSocket';
+import VoiceChat from '@/components/VoiceChat';
 
 export default function LobbyPage() {
   const params = useParams();
@@ -147,6 +148,10 @@ export default function LobbyPage() {
         )}
       </div>
 
+      <div className="mt-4">
+        <VoiceChat gameState={gameState} send={send} />
+      </div>
+
       <button
         onClick={() => {
           localStorage.removeItem('zero-game-room');
@@ -154,7 +159,7 @@ export default function LobbyPage() {
           disconnect();
           router.push('/');
         }}
-        className="mt-6 text-white/30 hover:text-white/60 transition-colors text-sm"
+        className="mt-4 text-white/30 hover:text-white/60 transition-colors text-sm"
       >
         Leave Room
       </button>
