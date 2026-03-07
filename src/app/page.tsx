@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useGameSocket } from '@/hooks/useGameSocket';
@@ -11,9 +11,11 @@ const ROOM_CODE_LENGTH = 4;
 
 function HomeContent() {
   const router = useRouter();
-  const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
+  const searchParams = useSearchParams();
+  const joinCode = searchParams.get('join')?.toUpperCase() ?? '';
+  const [mode, setMode] = useState<'menu' | 'create' | 'join'>(() => joinCode ? 'join' : 'menu');
   const [name, setName] = useState('');
-  const [roomCode, setRoomCode] = useState('');
+  const [roomCode, setRoomCode] = useState(joinCode);
   const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
 
   // Only connect WebSocket when we have a room code to connect to

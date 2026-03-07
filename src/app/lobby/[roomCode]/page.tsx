@@ -59,7 +59,7 @@ export default function LobbyPage() {
         <div className="text-center mb-6">
           <p className="text-white/50 text-sm mb-1">Room Code</p>
           <button
-            onClick={copyRoomCode}
+            onClick={copyInviteLink}
             className="group cursor-pointer"
           >
             <p className="text-4xl font-mono font-bold text-yellow-400 tracking-widest group-hover:text-yellow-300 transition-colors">
@@ -72,16 +72,6 @@ export default function LobbyPage() {
                 'Tap to copy'
               )}
             </p>
-          </button>
-          <button
-            onClick={copyInviteLink}
-            className="mt-3 px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-xs rounded-lg transition-colors border border-white/10"
-          >
-            {linkCopied ? (
-              <span className="text-green-400">Link copied!</span>
-            ) : (
-              '🔗 Copy invite link'
-            )}
           </button>
         </div>
 
