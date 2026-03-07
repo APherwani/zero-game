@@ -37,13 +37,29 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
       </h3>
 
       {/* Show other players' bids */}
-      <div className="flex flex-wrap justify-center gap-2 mb-3">
+      <div className="flex flex-wrap justify-center gap-2 mb-2">
         {gameState.players.map((p) => (
-          <div key={p.id} className="text-xs text-white/70">
-            <span className="font-medium">{p.name}</span>:{' '}
-            {p.bid !== null ? p.bid : '—'}
+          <div
+            key={p.id}
+            className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-medium border ${
+              p.bid !== null
+                ? 'bg-white/10 border-white/20 text-white'
+                : 'bg-white/5 border-white/10 text-white/40'
+            }`}
+          >
+            <span className="truncate max-w-[64px]">{p.name}</span>
+            <span className={`text-base font-bold mt-0.5 ${p.bid !== null ? 'text-yellow-400' : 'text-white/20'}`}>
+              {p.bid !== null ? p.bid : '—'}
+            </span>
           </div>
         ))}
+      </div>
+
+      {/* Running tally */}
+      <div className="text-center text-xs mb-3">
+        <span className="text-white/40">Total bid: </span>
+        <span className="font-bold text-white/80">{bidsPlaced.reduce((a, b) => a + b, 0)}</span>
+        <span className="text-white/40"> / {gameState.cardsPerRound} tricks</span>
       </div>
 
       {isMyTurn && (
