@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "types": ["@cloudflare/workers-types"],
+    "paths": {
+      "@/*": ["../src/*"]
+    }
+  },
+  "include": [
+    "./**/*.ts",
+    "../src/lib/types.ts",
+    "../src/lib/game-logic.ts",
+    "../src/lib/ws-protocol.ts",
+    "../src/server/BotBrain.ts"
+  ],
+  "exclude": ["node_modules"]
+}

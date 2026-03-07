@@ -97,22 +97,4 @@ export interface ClientGameState {
   myIndex: number;
 }
 
-// Socket event maps
-export interface ClientToServerEvents {
-  'create-room': (data: { playerName: string }) => void;
-  'join-room': (data: { roomCode: string; playerName: string }) => void;
-  'rejoin-room': (data: { roomCode: string; playerId: string }) => void;
-  'start-game': () => void;
-  'place-bid': (data: { bid: number }) => void;
-  'play-card': (data: { cardId: string }) => void;
-  'continue-round': () => void;
-  'add-bot': () => void;
-  'remove-bot': (data: { botId: string }) => void;
-}
-
-export interface ServerToClientEvents {
-  'room-created': (data: { roomCode: string; playerId: string }) => void;
-  'room-joined': (data: { roomCode: string; playerId: string }) => void;
-  'error': (data: { message: string }) => void;
-  'game-state': (state: ClientGameState) => void;
-}
+// WebSocket message types are defined in ws-protocol.ts

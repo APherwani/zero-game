@@ -2,15 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useSocket } from '@/hooks/useSocket';
-import { useGame } from '@/hooks/useGame';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import { useGameSocket } from '@/hooks/useGameSocket';
 
 export default function LobbyPage() {
   const params = useParams();
   const router = useRouter();
   const roomCode = params.roomCode as string;
-  const { socket, connected } = useSocket();
-  const { gameState, error, startGame, addBot, removeBot } = useGame(socket);
+
+  const { send, subscribe, connected, disconnect } = useWebSocket(roomCode);
+  const { gameState, error, startGame, addBot, removeBot, rejoinRoom } = useGameSocket(send, subscribe);
+
+  // On mount, try to rejoin if we have stored session
+  useEffect(() => {
+    if (connected) {
+      const storedRoom = localStorage.getItem('zero-game-room');
+      const storedPlayer = localStorage.getItem('zero-game-player');
+      if (storedRoom === roomCode && storedPlayer) {
+        rejoinRoom(roomCode, storedPlayer);
+      }
+    }
+  }, [connected, roomCode, rejoinRoom]);
 
   // Redirect to game page when game starts
   useEffect(() => {
@@ -84,7 +96,7 @@ export default function LobbyPage() {
             Players ({playerCount}/7)
           </h3>
           <div className="space-y-2">
-            {gameState?.players.map((p, i) => (
+            {gameState?.players.map((p) => (
               <div
                 key={p.id}
                 className="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3"
@@ -147,8 +159,9 @@ export default function LobbyPage() {
 
       <button
         onClick={() => {
-          localStorage.removeItem('oh-hell-room');
-          localStorage.removeItem('oh-hell-player');
+          localStorage.removeItem('zero-game-room');
+          localStorage.removeItem('zero-game-player');
+          disconnect();
           router.push('/');
         }}
         className="mt-6 text-white/30 hover:text-white/60 transition-colors text-sm"

@@ -1,0 +1,29 @@
+name = "zero-game"
+main = ".open-next/entry.js"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[durable_objects]
+bindings = [
+  { name = "GAME_ROOM", class_name = "GameRoomDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoomDO"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+# Future: uncomment when adding persistence/auth
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "zero-game-db"
+# database_id = "YOUR_DATABASE_ID"
+#
+# Secrets (set via `wrangler secret put <NAME>`):
+# JWT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET

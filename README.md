@@ -62,8 +62,15 @@ Open [http://localhost:3000](http://localhost:3000) to play.
 
 ## Tech Stack
 
-- **Next.js** with App Router
+- **Next.js** with App Router (deployed via [OpenNext](https://opennext.js.org/) on Cloudflare)
+- **Cloudflare Workers** + **Durable Objects** for game room state and native WebSockets
 - **React** for UI
-- **Socket.IO** for real-time multiplayer
 - **TypeScript** for type safety
 - **Tailwind CSS** for styling
+
+## Deployment
+
+```bash
+npm run build:worker   # Next.js build + OpenNext + custom entry generation
+npm run deploy         # Deploys to Cloudflare Workers
+```
