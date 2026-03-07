@@ -16,6 +16,8 @@ export class GameRoomDO extends DurableObject<Env> {
   private initialized = false;
   private connections: Map<string, WebSocket> = new Map(); // playerId -> WebSocket
   private disconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private botTurnTimer: ReturnType<typeof setTimeout> | null = null;
+  private trickResolveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingTrickResult: {
     winnerId: string;
     nextTrickNumber: number;
@@ -246,7 +248,9 @@ export class GameRoomDO extends DurableObject<Env> {
     if (result === 'trick-complete') {
       this.broadcastGameState();
       // After 2.5s reveal delay, resolve the trick
-      setTimeout(() => {
+      if (this.trickResolveTimer !== null) clearTimeout(this.trickResolveTimer);
+      this.trickResolveTimer = setTimeout(() => {
+        this.trickResolveTimer = null;
         this.resolveTrick();
         this.broadcastGameState();
         this.scheduleBotTurn();
@@ -596,6 +600,7 @@ export class GameRoomDO extends DurableObject<Env> {
   }
 
   private endRound(): void {
+    this.clearBotTimers();
     const roundScores = scoreRound(this.state.players);
 
     const roundScoreEntries: RoundScore[] = [];
@@ -645,7 +650,9 @@ export class GameRoomDO extends DurableObject<Env> {
         const result = this.playCard(playerId, validCards[0].id);
         if (result === 'trick-complete') {
           this.broadcastGameState();
-          setTimeout(() => {
+          if (this.trickResolveTimer !== null) clearTimeout(this.trickResolveTimer);
+          this.trickResolveTimer = setTimeout(() => {
+            this.trickResolveTimer = null;
             this.resolveTrick();
             this.broadcastGameState();
             this.scheduleBotTurn();
@@ -669,6 +676,17 @@ export class GameRoomDO extends DurableObject<Env> {
 
   // ── Bot scheduling ─────────────────────────────────────────────────
 
+  private clearBotTimers(): void {
+    if (this.botTurnTimer !== null) {
+      clearTimeout(this.botTurnTimer);
+      this.botTurnTimer = null;
+    }
+    if (this.trickResolveTimer !== null) {
+      clearTimeout(this.trickResolveTimer);
+      this.trickResolveTimer = null;
+    }
+  }
+
   private scheduleBotTurn(): void {
     if (!this.initialized) return;
     if (this.state.phase !== 'bidding' && this.state.phase !== 'playing') return;
@@ -679,7 +697,9 @@ export class GameRoomDO extends DurableObject<Env> {
     const expectedBotId = currentPlayer.id;
     const delay = 1000 + Math.random() * 1000;
 
-    setTimeout(() => {
+    if (this.botTurnTimer !== null) clearTimeout(this.botTurnTimer);
+    this.botTurnTimer = setTimeout(() => {
+      this.botTurnTimer = null;
       if (!this.initialized) return;
       const bot = this.state.players[this.state.currentTurnIndex];
       if (!bot || bot.id !== expectedBotId || !bot.isBot) return;
@@ -694,7 +714,9 @@ export class GameRoomDO extends DurableObject<Env> {
         const result = this.playCard(bot.id, cardId);
         if (result === 'trick-complete') {
           this.broadcastGameState();
-          setTimeout(() => {
+          if (this.trickResolveTimer !== null) clearTimeout(this.trickResolveTimer);
+          this.trickResolveTimer = setTimeout(() => {
+            this.trickResolveTimer = null;
             this.resolveTrick();
             this.broadcastGameState();
             this.scheduleBotTurn();
