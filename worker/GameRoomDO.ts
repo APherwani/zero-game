@@ -49,7 +49,7 @@ export class GameRoomDO extends DurableObject<Env> {
 
     // Use standard WebSocket API (NOT Hibernation API) so the DO stays
     // alive in memory for the duration of the game. The Hibernation API
-    // (ctx.acceptWebSocket) evicts the DO between messages, destroying
+    // (this.ctx.acceptWebSocket) evicts the DO between messages, destroying
     // all in-memory state (connections map, game state, timers).
     server.accept();
 

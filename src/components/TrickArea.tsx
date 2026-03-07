@@ -64,6 +64,7 @@ export default function TrickArea({ currentTrick, players, myIndex, trickWinner 
 
       {currentTrick.map((tc, i) => {
         const playerIndex = players.findIndex((p) => p.id === tc.playerId);
+        if (playerIndex === -1) return null;
         const player = players[playerIndex];
         const isWinner = tc.playerId === trickWinner;
         const style = getStyle(playerIndex);

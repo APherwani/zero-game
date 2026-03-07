@@ -139,7 +139,7 @@ export function decideBid(player: Player, state: GameState): number {
   // In a 1-card round, high cards dominate; in 5+ card rounds, distribution matters more
   if (state.cardsPerRound <= 2) {
     // In very short rounds, round more aggressively
-    estimatedTricks = Math.round(estimatedTricks * 1.1);
+    estimatedTricks = estimatedTricks * 1.1;
   }
 
   let bid = Math.round(estimatedTricks);

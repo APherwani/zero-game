@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useWebSocket } from '@/hooks/useWebSocket';
@@ -59,8 +59,9 @@ function HomeContent() {
       const code = data.roomCode as string;
       setPendingAction({ type: 'create', name: name.trim() });
       setPendingRoomCode(code);
-    } catch {
+    } catch (err) {
       // If REST call fails, generate code client-side as fallback
+      console.warn('[zero-game] /api/rooms failed, using client-side room code generation:', err);
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
       let code = '';
       for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];

@@ -7,10 +7,15 @@ type MessageHandler = (msg: ServerMessage) => void;
 
 let globalWs: WebSocket | null = null;
 let globalListeners = new Set<MessageHandler>();
+let globalConnectionListeners = new Set<() => void>();
 let globalConnected = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 1000;
 let currentRoomCode: string | null = null;
+
+function notifyConnectionListeners() {
+  for (const listener of globalConnectionListeners) listener();
+}
 
 function connectToRoom(roomCode: string) {
   if (globalWs && globalWs.readyState === WebSocket.OPEN) {
@@ -28,15 +33,13 @@ function connectToRoom(roomCode: string) {
   ws.onopen = () => {
     globalConnected = true;
     reconnectDelay = 1000;
-    // Notify all hook instances to update connection state
-    for (const listener of globalListeners) {
-      listener({ type: 'connected' });
-    }
+    notifyConnectionListeners();
   };
 
   ws.onclose = () => {
     globalConnected = false;
     globalWs = null;
+    notifyConnectionListeners();
     // Auto-reconnect with exponential backoff
     if (currentRoomCode) {
       reconnectTimer = setTimeout(() => {
@@ -64,17 +67,11 @@ function connectToRoom(roomCode: string) {
 
 export function useWebSocket(roomCode?: string) {
   const [connected, setConnected] = useState(globalConnected);
-  const listenerRef = useRef<MessageHandler | null>(null);
   const subscribersRef = useRef<Set<MessageHandler>>(new Set());
 
   useEffect(() => {
-    // Internal listener to track connection state changes
-    const handler: MessageHandler = () => {
-      setConnected(globalWs?.readyState === WebSocket.OPEN);
-    };
-
-    listenerRef.current = handler;
-    globalListeners.add(handler);
+    const onConnectionChange = () => setConnected(globalConnected);
+    globalConnectionListeners.add(onConnectionChange);
 
     // Connect if room code provided
     if (roomCode) {
@@ -84,19 +81,9 @@ export function useWebSocket(roomCode?: string) {
     setConnected(globalConnected);
 
     return () => {
-      if (listenerRef.current) {
-        globalListeners.delete(listenerRef.current);
-      }
+      globalConnectionListeners.delete(onConnectionChange);
     };
   }, [roomCode]);
-
-  // Also update connected state when globalConnected changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setConnected(globalWs?.readyState === WebSocket.OPEN);
-    }, 500);
-    return () => clearInterval(interval);
-  }, [connected]);
 
   const send = useCallback((msg: ClientMessage) => {
     if (globalWs?.readyState === WebSocket.OPEN) {
@@ -133,6 +120,7 @@ export function useWebSocket(roomCode?: string) {
       globalWs = null;
     }
     globalConnected = false;
+    notifyConnectionListeners();
   }, []);
 
   return { send, subscribe, connected, disconnect };
