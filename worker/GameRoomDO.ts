@@ -16,6 +16,7 @@ export class GameRoomDO extends DurableObject<Env> {
   private initialized = false;
   private connections: Map<string, WebSocket> = new Map(); // playerId -> WebSocket
   private disconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private deadlineTimers: Map<string, ReturnType<typeof setTimeout>> = new Map(); // 5-min rejoin deadline
   private botTurnTimer: ReturnType<typeof setTimeout> | null = null;
   private trickResolveTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingTrickResult: {
@@ -170,11 +171,16 @@ export class GameRoomDO extends DurableObject<Env> {
 
     player.connected = true;
 
-    // Cancel disconnect timer
+    // Cancel disconnect timer and rejoin deadline
     const timer = this.disconnectTimers.get(payload.playerId);
     if (timer) {
       clearTimeout(timer);
       this.disconnectTimers.delete(payload.playerId);
+    }
+    const deadline = this.deadlineTimers.get(payload.playerId);
+    if (deadline) {
+      clearTimeout(deadline);
+      this.deadlineTimers.delete(payload.playerId);
     }
 
     // Cancel stale room alarm
@@ -387,6 +393,13 @@ export class GameRoomDO extends DurableObject<Env> {
       this.transferHost();
     }
 
+    // If 2+ humans are now disconnected during an active game, end it immediately
+    const disconnectedHumans = this.state.players.filter(p => !p.isBot && !p.connected).length;
+    if (disconnectedHumans >= 2 && this.state.phase !== 'gameOver') {
+      this.endGameAbandoned();
+      return;
+    }
+
     // Set stale room alarm if all disconnected
     if (this.allDisconnected()) {
       this.ctx.storage.setAlarm(Date.now() + 10 * 60 * 1000); // 10 min
@@ -398,6 +411,16 @@ export class GameRoomDO extends DurableObject<Env> {
       this.autoPlayForDisconnected(playerId);
     }, 60000);
     this.disconnectTimers.set(playerId, timer);
+
+    // 5-min deadline: if still disconnected, end the game
+    const deadline = setTimeout(() => {
+      this.deadlineTimers.delete(playerId);
+      const p = this.state.players.find(pl => pl.id === playerId);
+      if (p && !p.connected) {
+        this.endGameAbandoned();
+      }
+    }, 5 * 60 * 1000);
+    this.deadlineTimers.set(playerId, deadline);
 
     this.broadcastGameState();
   }
@@ -621,6 +644,7 @@ export class GameRoomDO extends DurableObject<Env> {
 
     if (this.state.roundNumber >= this.state.totalRounds) {
       this.state.phase = 'gameOver';
+      this.clearDeadlineTimers();
     } else {
       this.state.phase = 'roundEnd';
     }
@@ -663,6 +687,19 @@ export class GameRoomDO extends DurableObject<Env> {
         }
       }
     }
+  }
+
+  private endGameAbandoned(): void {
+    if (this.state.phase === 'gameOver' || this.state.phase === 'lobby') return;
+    this.clearDeadlineTimers();
+    this.clearBotTimers();
+    this.state.phase = 'gameOver';
+    this.broadcastGameState();
+  }
+
+  private clearDeadlineTimers(): void {
+    for (const t of this.deadlineTimers.values()) clearTimeout(t);
+    this.deadlineTimers.clear();
   }
 
   private transferHost(): boolean {

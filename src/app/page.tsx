@@ -16,6 +16,11 @@ function HomeContent() {
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>(() => joinCode ? 'join' : 'menu');
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState(joinCode);
+  const [storedRoom, setStoredRoom] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStoredRoom(localStorage.getItem('zero-game-room'));
+  }, []);
   const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
 
   // Only connect WebSocket when we have a room code to connect to
@@ -94,6 +99,14 @@ function HomeContent() {
 
       {mode === 'menu' && (
         <div className="flex flex-col gap-4 w-full max-w-xs">
+          {storedRoom && !joinCode && (
+            <button
+              onClick={() => router.push(`/lobby/${storedRoom}`)}
+              className="py-4 px-8 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-500 transition-colors border border-green-400/30"
+            >
+              Resume Game ({storedRoom})
+            </button>
+          )}
           <button
             onClick={() => setMode('create')}
             className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors"
