@@ -61,15 +61,15 @@ export function useGameSocket(
   useEffect(() => {
     const unsubscribe = subscribe((msg: ServerMessage) => {
       switch (msg.type) {
+        case 'connected':
+          break;
         case 'game-state':
           setGameState(msg.payload);
           setError(null);
           break;
         case 'error':
-          if (msg.payload.message) {
-            setError(msg.payload.message);
-            setTimeout(() => setError(null), 3000);
-          }
+          setError(msg.payload.message);
+          setTimeout(() => setError(null), 3000);
           break;
         case 'room-created':
         case 'room-joined':

@@ -30,7 +30,7 @@ function connectToRoom(roomCode: string) {
     reconnectDelay = 1000;
     // Notify all hook instances to update connection state
     for (const listener of globalListeners) {
-      listener({ type: 'error', payload: { message: '' } });
+      listener({ type: 'connected' });
     }
   };
 

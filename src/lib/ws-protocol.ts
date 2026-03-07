@@ -18,6 +18,7 @@ export type ClientMessage =
 // ── Server → Client ─────────────────────────────────────────────────
 
 export type ServerMessage =
+  | { type: 'connected' }
   | { type: 'game-state'; payload: ClientGameState }
   | { type: 'room-created'; payload: { roomCode: string; playerId: string } }
   | { type: 'room-joined'; payload: { roomCode: string; playerId: string } }
