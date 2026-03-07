@@ -91,30 +91,31 @@ export default {
         "Content-Type": "application/json",
       };
 
-      // POST /api/calls/session → create a new CF Calls session
+      // POST /api/calls/session → create a new CF SFU session (returns sessionId only)
       if (url.pathname === "/api/calls/session") {
         const cfRes = await fetch(\`\${cfBase}/sessions/new\`, { method: "POST", headers: cfHeaders });
         const data = await cfRes.json();
-        return Response.json(
-          { sessionId: data.sessionId, sdp: data.sessionDescription?.sdp },
-          { headers: corsHeaders() }
-        );
+        console.log("[calls/session] CF response:", JSON.stringify(data));
+        return Response.json({ sessionId: data.sessionId }, { headers: corsHeaders() });
       }
 
-      // POST /api/calls/publish → push local track, get trackName
+      // POST /api/calls/publish → client sends its offer SDP; CF returns an answer SDP + trackName
       if (url.pathname === "/api/calls/publish") {
         const body = await request.json();
+        console.log("[calls/publish] body:", JSON.stringify({ sessionId: body.sessionId, mid: body.mid, sdpLen: body.sdp?.length }));
         const cfRes = await fetch(\`\${cfBase}/sessions/\${body.sessionId}/tracks/new\`, {
           method: "POST",
           headers: cfHeaders,
           body: JSON.stringify({
-            sessionDescription: { type: "answer", sdp: body.sdp },
+            sessionDescription: { type: "offer", sdp: body.sdp },
             tracks: [{ location: "local", mid: body.mid, trackName: "audio" }],
           }),
         });
         const data = await cfRes.json();
+        console.log("[calls/publish] CF response:", JSON.stringify(data));
         const trackName = data.tracks?.[0]?.trackName ?? "audio";
-        return Response.json({ trackName }, { headers: corsHeaders() });
+        const answerSdp = data.sessionDescription?.sdp;
+        return Response.json({ trackName, answerSdp }, { headers: corsHeaders() });
       }
 
       // POST /api/calls/subscribe → pull remote tracks, get new SDP offer

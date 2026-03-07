@@ -28,63 +28,80 @@ export function useVoiceChat(gameState: ClientGameState | null, send: SendFn) {
     setError(null);
     try {
       // 1. Get microphone
+      console.log('[voice] requesting microphone');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       const audioTrack = stream.getAudioTracks()[0];
+      console.log('[voice] got audio track:', audioTrack.label);
       localTrackRef.current = audioTrack;
 
-      // 2. Create CF Calls session → get sessionId + SDP offer from CF
-      const sessionRes = await fetch('/api/calls/session', { method: 'POST' });
-      if (!sessionRes.ok) throw new Error('Failed to create voice session');
-      const { sessionId, sdp: offerSdp } = await sessionRes.json() as { sessionId: string; sdp: string };
-      sessionIdRef.current = sessionId;
-
-      // 3. Create peer connection
+      // 2. Create RTCPeerConnection first (client-side offer flow)
       const pc = new RTCPeerConnection(STUN);
       pcRef.current = pc;
+      pc.onconnectionstatechange = () => console.log('[voice] pc connectionState:', pc.connectionState);
+      pc.oniceconnectionstatechange = () => console.log('[voice] pc iceConnectionState:', pc.iceConnectionState);
 
       // Wire up incoming remote tracks → play audio
       pc.ontrack = (event) => {
         const stream = event.streams[0];
+        console.log('[voice] ontrack fired, stream id:', stream?.id);
         if (!stream) return;
-        // Match to a playerId via the voiceTracks list in game state
-        // We use the track's stream id as a key; we'll associate by order of subscription
         const audio = new Audio();
         audio.srcObject = stream;
         audio.autoplay = true;
-        audio.play().catch(() => { /* autoplay blocked — user gesture needed */ });
-        // Store by stream id temporarily; reassociated in subscribeToTracks
+        audio.play().catch((e) => console.warn('[voice] autoplay blocked:', e));
         audioElemsRef.current.set(stream.id, audio);
       };
 
-      // 4. Add local audio transceiver (send-only)
+      // 3. Add local audio transceiver (send-only)
       const transceiver = pc.addTransceiver(audioTrack, { direction: 'sendonly' });
+      console.log('[voice] transceiver mid:', transceiver.mid);
 
-      // 5. Set CF's offer as remote description
-      await pc.setRemoteDescription({ type: 'offer', sdp: offerSdp });
+      // 4. Create SDP offer on the client
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      console.log('[voice] offer sdp length:', offer.sdp?.length ?? 0, '| first 60:', offer.sdp?.slice(0, 60));
 
-      // 6. Create and set local answer
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+      // 5. Create CF SFU session → sessionId only (no SDP at this stage)
+      console.log('[voice] creating SFU session');
+      const sessionRes = await fetch('/api/calls/session', { method: 'POST' });
+      console.log('[voice] session response status:', sessionRes.status);
+      const sessionRaw = await sessionRes.json() as { sessionId: string };
+      console.log('[voice] session response body:', JSON.stringify(sessionRaw));
+      if (!sessionRes.ok) throw new Error('Failed to create voice session');
+      const { sessionId } = sessionRaw;
+      console.log('[voice] sessionId:', sessionId);
+      sessionIdRef.current = sessionId;
 
-      // 7. Publish local track → get trackName back from CF
+      // 6. Publish track: send client offer → CF returns answer SDP + trackName
+      console.log('[voice] publishing track, mid:', transceiver.mid);
       const publishRes = await fetch('/api/calls/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, sdp: answer.sdp, mid: transceiver.mid }),
+        body: JSON.stringify({ sessionId, sdp: offer.sdp, mid: transceiver.mid }),
       });
+      console.log('[voice] publish response status:', publishRes.status);
+      const publishData = await publishRes.json() as { trackName: string; answerSdp: string };
+      console.log('[voice] publish response body:', JSON.stringify({ trackName: publishData.trackName, answerSdpLen: publishData.answerSdp?.length }));
       if (!publishRes.ok) throw new Error('Failed to publish audio track');
-      const { trackName } = await publishRes.json() as { trackName: string };
+      const { trackName, answerSdp } = publishData;
+
+      // 7. Set CF's answer as remote description
+      console.log('[voice] setRemoteDescription (answer), sdp length:', answerSdp?.length ?? 0);
+      await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
 
       // 8. Signal to other players via game WebSocket
+      console.log('[voice] signalling trackName:', trackName);
       send({ type: 'voice-track', payload: { sessionId, trackName } });
 
       setJoined(true);
 
       // 9. Subscribe to any players already in voice
       if (gameState?.voiceTracks.length) {
+        console.log('[voice] subscribing to existing tracks:', gameState.voiceTracks);
         await subscribeToTracks(pc, sessionId, gameState.voiceTracks);
       }
     } catch (err) {
+      console.error('[voice] joinVoice error:', err);
       setError(err instanceof Error ? err.message : 'Could not join voice');
       cleanup();
     }
@@ -104,6 +121,7 @@ export function useVoiceChat(gameState: ClientGameState | null, send: SendFn) {
     if (!newTracks.length) return;
 
     try {
+      console.log('[voice] subscribing to tracks:', newTracks);
       const subscribeRes = await fetch('/api/calls/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,25 +130,31 @@ export function useVoiceChat(gameState: ClientGameState | null, send: SendFn) {
           remoteTracks: newTracks.map(t => ({ sessionId: t.sessionId, trackName: t.trackName })),
         }),
       });
+      console.log('[voice] subscribe response status:', subscribeRes.status);
+      const subscribeData = await subscribeRes.json() as { sdp: string };
+      console.log('[voice] subscribe response body:', JSON.stringify(subscribeData));
       if (!subscribeRes.ok) return;
-      const { sdp: offerSdp } = await subscribeRes.json() as { sdp: string };
-      if (!offerSdp) return;
+      const { sdp: offerSdp } = subscribeData;
+      if (!offerSdp) { console.warn('[voice] subscribe returned no SDP'); return; }
 
+      console.log('[voice] setRemoteDescription for subscription, sdp length:', offerSdp.length);
       await pc.setRemoteDescription({ type: 'offer', sdp: offerSdp });
       const answer = await pc.createAnswer();
+      console.log('[voice] renegotiate answer sdp length:', answer.sdp?.length ?? 0);
       await pc.setLocalDescription(answer);
 
-      await fetch('/api/calls/renegotiate', {
+      const regenRes = await fetch('/api/calls/renegotiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: mySessionId, sdp: answer.sdp }),
       });
+      console.log('[voice] renegotiate response status:', regenRes.status);
 
       for (const t of newTracks) {
         subscribedRef.current.set(t.playerId, `${t.sessionId}:${t.trackName}`);
       }
-    } catch {
-      // Non-fatal — remote audio just won't play
+    } catch (err) {
+      console.error('[voice] subscribeToTracks error:', err);
     }
   }, []);
 
