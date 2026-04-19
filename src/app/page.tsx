@@ -88,10 +88,10 @@ function HomeContent() {
   }, [name, roomCode]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col items-center justify-center px-4">
+    <div className="relative min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col items-center justify-center px-4">
       <div className="text-center mb-12">
         <h1 className="text-6xl font-bold text-white mb-2">Zero Game</h1>
-        <p className="text-green-300/70 text-lg">Pherwani fam card game</p>
+        <p className="text-green-300/70 text-lg">Call your tricks. Hit them exact, or get zero.</p>
       </div>
 
       {error && (
@@ -221,6 +221,10 @@ function HomeContent() {
           </button>
         </div>
       )}
+
+      <p className="absolute bottom-4 text-white/30 text-xs">
+        Made by Arjun Pherwani
+      </p>
     </div>
   );
 }
