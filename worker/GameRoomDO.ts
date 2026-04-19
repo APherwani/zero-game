@@ -396,12 +396,26 @@ export class GameRoomDO extends DurableObject<Env> {
     this.voiceTracks.delete(playerId);
 
     if (this.state.phase === 'lobby') {
-      // Remove from lobby immediately
-      this.state.players = this.state.players.filter(p => p.id !== playerId);
-      delete this.state.scores[playerId];
-      if (playerId === this.state.hostId) {
-        this.transferHost();
+      // Grace period: a transient disconnect (phone lock, Wi-Fi hiccup,
+      // idle WebSocket closed by CF edge) shouldn't evict a player who's
+      // about to reconnect. Remove only if they haven't rejoined in 60s.
+      const timer = setTimeout(() => {
+        this.disconnectTimers.delete(playerId);
+        const p = this.state.players.find(pl => pl.id === playerId);
+        if (!p || p.connected) return;
+        this.state.players = this.state.players.filter(pl => pl.id !== playerId);
+        delete this.state.scores[playerId];
+        if (playerId === this.state.hostId) {
+          this.transferHost();
+        }
+        this.broadcastGameState();
+      }, 60000);
+      this.disconnectTimers.set(playerId, timer);
+
+      if (this.allDisconnected()) {
+        this.ctx.storage.setAlarm(Date.now() + 10 * 60 * 1000);
       }
+
       this.broadcastGameState();
       return;
     }
