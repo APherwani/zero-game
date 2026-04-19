@@ -10,7 +10,7 @@ const SECTIONS = [
     content: (
       <div className="space-y-4">
         <p>
-          Zero Game is a <strong>trick-taking card game</strong> for 3-7 players using a standard 52-card deck.
+          Zero Game is a <strong>trick-taking card game</strong> for 3-10 players. A standard 52-card deck is used for 3-7 players; games with 8-10 players use two decks.
         </p>
         <p>
           The goal is simple: <strong>predict exactly how many tricks you will win</strong> each round.
@@ -117,6 +117,7 @@ const SECTIONS = [
         </div>
         <p className="text-white/60 text-sm">
           The trick winner leads the next trick. Cards rank from 2 (lowest) to Ace (highest).
+          In two-deck games (8-10 players), if identical cards are played in the same trick, the one played first wins.
         </p>
       </div>
     ),

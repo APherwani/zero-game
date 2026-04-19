@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { ClientGameState } from '@/lib/types';
+import type { ClientGameState, GameMode } from '@/lib/types';
 import type { ClientMessage, ServerMessage } from '@/lib/ws-protocol';
 import type { SoundManager } from '@/lib/sounds';
 
@@ -83,8 +83,8 @@ export function useGameSocket(
 
   // ── Action emitters ────────────────────────────────────────────────
 
-  const createRoom = useCallback((playerName: string) => {
-    send({ type: 'create-room', payload: { playerName } });
+  const createRoom = useCallback((playerName: string, mode?: GameMode) => {
+    send({ type: 'create-room', payload: { playerName, mode } });
   }, [send]);
 
   const joinRoom = useCallback((roomCode: string, playerName: string) => {
@@ -99,12 +99,16 @@ export function useGameSocket(
     send({ type: 'start-game' });
   }, [send]);
 
-  const placeBid = useCallback((bid: number) => {
-    send({ type: 'place-bid', payload: { bid } });
+  const placeBid = useCallback((bid: number, targetPlayerId?: string) => {
+    send({ type: 'place-bid', payload: { bid, targetPlayerId } });
   }, [send]);
 
   const playCard = useCallback((cardId: string) => {
     send({ type: 'play-card', payload: { cardId } });
+  }, [send]);
+
+  const submitTricks = useCallback((tricks: number, targetPlayerId?: string) => {
+    send({ type: 'submit-tricks', payload: { tricks, targetPlayerId } });
   }, [send]);
 
   const continueRound = useCallback(() => {
@@ -119,6 +123,14 @@ export function useGameSocket(
     send({ type: 'remove-bot', payload: { botId } });
   }, [send]);
 
+  const addPlayer = useCallback((playerName: string) => {
+    send({ type: 'add-player', payload: { playerName } });
+  }, [send]);
+
+  const removePlayer = useCallback((playerId: string) => {
+    send({ type: 'remove-player', payload: { playerId } });
+  }, [send]);
+
   return {
     gameState,
     error,
@@ -128,8 +140,11 @@ export function useGameSocket(
     startGame,
     placeBid,
     playCard,
+    submitTricks,
     continueRound,
     addBot,
     removeBot,
+    addPlayer,
+    removePlayer,
   };
 }

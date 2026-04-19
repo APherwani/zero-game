@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import type { ServerMessage } from '@/lib/ws-protocol';
+import type { GameMode } from '@/lib/types';
 
 const ROOM_CODE_LENGTH = 4;
 
@@ -17,6 +18,7 @@ function HomeContent() {
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState(joinCode);
   const [storedRoom, setStoredRoom] = useState<string | null>(null);
+  const [gameMode, setGameMode] = useState<GameMode>('digital');
 
   useEffect(() => {
     setStoredRoom(localStorage.getItem('zero-game-room'));
@@ -28,7 +30,7 @@ function HomeContent() {
   const { error, createRoom, joinRoom } = useGameSocket(send, subscribe);
 
   // Track pending action to execute once WebSocket connects
-  const [pendingAction, setPendingAction] = useState<{ type: 'create' | 'join'; name: string; roomCode?: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: 'create' | 'join'; name: string; roomCode?: string; mode?: GameMode } | null>(null);
 
   // Listen for room-created and room-joined events
   useEffect(() => {
@@ -50,7 +52,7 @@ function HomeContent() {
   useEffect(() => {
     if (connected && pendingAction) {
       if (pendingAction.type === 'create') {
-        createRoom(pendingAction.name);
+        createRoom(pendingAction.name, pendingAction.mode);
       } else if (pendingAction.type === 'join' && pendingAction.roomCode) {
         joinRoom(pendingAction.roomCode, pendingAction.name);
       }
@@ -59,12 +61,13 @@ function HomeContent() {
   }, [connected, pendingAction, createRoom, joinRoom]);
 
   const handleCreate = useCallback(async () => {
-    if (!name.trim()) return;
+    // In-person mode doesn't require a name (host is a scorekeeper, not a player).
+    if (gameMode === 'digital' && !name.trim()) return;
     try {
       const res = await fetch('/api/rooms', { method: 'POST' });
       const data = await res.json();
       const code = data.roomCode as string;
-      setPendingAction({ type: 'create', name: name.trim() });
+      setPendingAction({ type: 'create', name: name.trim(), mode: gameMode });
       setPendingRoomCode(code);
     } catch (err) {
       // If REST call fails, generate code client-side as fallback
@@ -72,10 +75,10 @@ function HomeContent() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
       let code = '';
       for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
-      setPendingAction({ type: 'create', name: name.trim() });
+      setPendingAction({ type: 'create', name: name.trim(), mode: gameMode });
       setPendingRoomCode(code);
     }
-  }, [name]);
+  }, [name, gameMode]);
 
   const handleJoin = useCallback(() => {
     if (!name.trim() || !roomCode.trim()) return;
@@ -130,19 +133,46 @@ function HomeContent() {
 
       {mode === 'create' && (
         <div className="flex flex-col gap-4 w-full max-w-xs">
-          <input
-            type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={20}
-            autoFocus
-            className="py-3 px-4 bg-white/10 text-white rounded-xl border border-white/20 placeholder-white/40 text-center text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-          />
+          {gameMode === 'digital' && (
+            <input
+              type="text"
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={20}
+              autoFocus
+              className="py-3 px-4 bg-white/10 text-white rounded-xl border border-white/20 placeholder-white/40 text-center text-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+            />
+          )}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => setGameMode('digital')}
+              className={`py-2 px-3 rounded-lg font-medium text-sm transition-colors ${
+                gameMode === 'digital' ? 'bg-yellow-500 text-black' : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Play Online
+            </button>
+            <button
+              type="button"
+              onClick={() => setGameMode('inPerson')}
+              className={`py-2 px-3 rounded-lg font-medium text-sm transition-colors ${
+                gameMode === 'inPerson' ? 'bg-yellow-500 text-black' : 'text-white/60 hover:text-white'
+              }`}
+            >
+              In Person
+            </button>
+          </div>
+          <p className="text-white/50 text-xs text-center -mt-2">
+            {gameMode === 'inPerson'
+              ? 'Play with physical cards; the app tracks bids and scores.'
+              : 'The app deals cards and enforces rules.'}
+          </p>
           <button
             onClick={handleCreate}
-            disabled={!name.trim()}
+            disabled={gameMode === 'digital' && !name.trim()}
             className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Create Room

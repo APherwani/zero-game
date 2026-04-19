@@ -1,5 +1,5 @@
 import type { Card, Suit, Rank, Player, TrickCard, GameState } from '../lib/types';
-import { isValidBid, isValidPlay } from '../lib/game-logic';
+import { isValidBid, isValidPlay, numDecksForPlayers } from '../lib/game-logic';
 
 const RANK_ORDER: Record<Rank, number> = {
   '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
@@ -7,8 +7,8 @@ const RANK_ORDER: Record<Rank, number> = {
 };
 
 const BOT_NAMES = [
-  'Bot Alice', 'Bot Bob', 'Bot Carol', 'Bot Dave',
-  'Bot Eve', 'Bot Frank', 'Bot Grace',
+  'Bot Aarav', 'Bot Priya', 'Bot Rohan', 'Bot Diya', 'Bot Vikram',
+  'Bot Anika', 'Bot Kabir', 'Bot Meera', 'Bot Vihaan', 'Bot Isha',
 ];
 
 export function getNextBotName(existingNames: string[]): string {
@@ -65,18 +65,16 @@ function suitCounts(hand: Card[]): Map<Suit, number> {
   return counts;
 }
 
-/** Build a set of all cards that have been played (completed tricks + current trick) */
-function getPlayedCards(state: GameState): Set<string> {
-  const played = new Set<string>();
+/** Count how many copies of each (suit, rank) have been played in completed tricks */
+function getPlayedCounts(state: GameState): Map<string, number> {
+  const counts = new Map<string, number>();
   for (const trick of state.completedTricks) {
     for (const tc of trick.cards) {
-      played.add(tc.card.id);
+      const k = `${tc.card.suit}-${tc.card.rank}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
     }
   }
-  for (const tc of state.currentTrick) {
-    played.add(tc.card.id);
-  }
-  return played;
+  return counts;
 }
 
 // ── BIDDING ──────────────────────────────────────────────────────────
@@ -197,12 +195,13 @@ export function decideCard(player: Player, state: GameState): string {
     return validCards[0].id;
   }
 
-  const playedCards = getPlayedCards(state);
+  const playedCounts = getPlayedCounts(state);
+  const numDecks = numDecksForPlayers(numPlayers);
 
   // ── LEADING (no lead suit) ──
   if (leadSuit === null) {
     if (wantMoreTricks) {
-      return pickLeadWantTricks(validCards, hand, trumpSuit, playedCards);
+      return pickLeadWantTricks(validCards, hand, trumpSuit, playedCounts, numDecks);
     } else {
       return pickLeadAvoidTricks(validCards, hand, trumpSuit);
     }
@@ -226,7 +225,7 @@ export function decideCard(player: Player, state: GameState): string {
         // Not last: use a strong enough card to likely hold
         // If we have the highest remaining card in this suit, use cheapest beater
         const highestBeater = beaters[beaters.length - 1];
-        if (isHighestRemaining(highestBeater, leadSuit, hand, playedCards, currentTrick)) {
+        if (isHighestRemaining(highestBeater, leadSuit, hand, playedCounts, currentTrick, numDecks)) {
           return beaters[0].id; // any beater works if we have the top card as backup
         }
         // Otherwise play a mid-high beater to improve chances
@@ -245,7 +244,7 @@ export function decideCard(player: Player, state: GameState): string {
 
   // ── CAN'T FOLLOW SUIT ──
   if (wantMoreTricks) {
-    return pickOffSuitWantTricks(validCards, hand, trumpSuit, currentTrick, playedCards);
+    return pickOffSuitWantTricks(validCards, trumpSuit, currentTrick);
   } else {
     return pickOffSuitAvoidTricks(validCards, hand, trumpSuit);
   }
@@ -253,26 +252,29 @@ export function decideCard(player: Player, state: GameState): string {
 
 // ── HELPER STRATEGIES ────────────────────────────────────────────────
 
-/** Check if a card is the highest remaining card of its suit */
+/** Check if a card is the highest remaining card of its suit.
+ *  With multiple decks, each (suit, rank) can have up to numDecks copies;
+ *  we treat a rank as "accounted for" only when all copies are in our hand,
+ *  the current trick, or already played.
+ */
 function isHighestRemaining(
   card: Card,
   suit: Suit,
   hand: Card[],
-  playedCards: Set<string>,
-  currentTrick: TrickCard[]
+  playedCounts: Map<string, number>,
+  currentTrick: TrickCard[],
+  numDecks: number
 ): boolean {
   const rank = RANK_ORDER[card.rank];
   const allRanks: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 
   for (const r of allRanks) {
     if (RANK_ORDER[r] <= rank) continue;
-    const id = `${suit}-${r}`;
-    // If a higher card of this suit is not in our hand and not played, it's still out there
-    const inHand = hand.some(c => c.id === id);
-    const inTrick = currentTrick.some(tc => tc.card.id === id);
-    if (!playedCards.has(id) && !inHand && !inTrick) {
-      return false; // a higher card is still unplayed somewhere
-    }
+    const k = `${suit}-${r}`;
+    let seen = playedCounts.get(k) ?? 0;
+    for (const c of hand) if (c.suit === suit && c.rank === r) seen++;
+    for (const tc of currentTrick) if (tc.card.suit === suit && tc.card.rank === r) seen++;
+    if (seen < numDecks) return false; // at least one copy is still out there
   }
   return true;
 }
@@ -282,7 +284,8 @@ function pickLeadWantTricks(
   validCards: Card[],
   hand: Card[],
   trumpSuit: Suit | null,
-  playedCards: Set<string>
+  playedCounts: Map<string, number>,
+  numDecks: number
 ): string {
   // Strategy: lead with a card that's the highest remaining in its suit (guaranteed winner)
   // If no guaranteed winner, lead a strong card from our longest suit to build control
@@ -290,10 +293,10 @@ function pickLeadWantTricks(
   // Check for guaranteed winners first
   const currentTrick: TrickCard[] = []; // empty since we're leading
   for (const card of validCards) {
-    if (isHighestRemaining(card, card.suit, hand, playedCards, currentTrick)) {
+    if (isHighestRemaining(card, card.suit, hand, playedCounts, currentTrick, numDecks)) {
       // Found a guaranteed winner — play lowest guaranteed winner to save higher ones
       const guaranteedWinners = validCards.filter(c =>
-        isHighestRemaining(c, c.suit, hand, playedCards, currentTrick)
+        isHighestRemaining(c, c.suit, hand, playedCounts, currentTrick, numDecks)
       );
       return sortByRank(guaranteedWinners, true)[0].id;
     }
@@ -349,10 +352,8 @@ function pickLeadAvoidTricks(
 /** Off-suit play when wanting tricks (try to trump) */
 function pickOffSuitWantTricks(
   validCards: Card[],
-  hand: Card[],
   trumpSuit: Suit | null,
-  currentTrick: TrickCard[],
-  playedCards: Set<string>
+  currentTrick: TrickCard[]
 ): string {
   const trumpCards = sortByRank(validCards.filter(c => c.suit === trumpSuit), true);
 

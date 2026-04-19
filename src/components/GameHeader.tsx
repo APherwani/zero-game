@@ -38,7 +38,7 @@ export default function GameHeader({ gameState, muted, onToggleMute }: GameHeade
         )}
       </div>
 
-      <TrumpDisplay trumpCard={gameState.trumpCard} />
+      {gameState.mode === 'digital' && <TrumpDisplay trumpCard={gameState.trumpCard} />}
 
       <button
         onClick={copyRoomCode}

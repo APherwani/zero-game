@@ -2,12 +2,13 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './env';
 import type {
   GameState, Player, Card, TrickCard, RoundScore, CompletedTrick,
-  ClientGameState, ClientPlayer, GamePhase, Suit,
+  ClientGameState, ClientPlayer, GamePhase, GameMode, Suit, Spectator,
 } from '../src/lib/types';
 import type { ClientMessage, ServerMessage, ChatMessage } from '../src/lib/ws-protocol';
 import {
   createDeck, shuffleDeck, dealCards, determineTrump, getRoundSequence,
   isValidBid, isValidPlay, determineTrickWinner, scoreRound, sortHand,
+  numDecksForPlayers,
 } from '../src/lib/game-logic';
 import { decideBid, decideCard, getNextBotName } from '../src/server/BotBrain';
 
@@ -15,7 +16,8 @@ export class GameRoomDO extends DurableObject<Env> {
   private state!: GameState;
   private initialized = false;
   private connections: Map<string, WebSocket> = new Map(); // playerId -> WebSocket
-  private disconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private disconnectTimers: Map<string, ReturnType<typeof setTimeout>> = new Map(); // lobby grace only
+  private disconnectedAt: Map<string, number> = new Map(); // playerId -> timestamp of last disconnect (in-game)
   private deadlineTimers: Map<string, ReturnType<typeof setTimeout>> = new Map(); // 5-min rejoin deadline
   private voiceTracks: Map<string, { sessionId: string; trackName: string }> = new Map();
   private botTurnTimer: ReturnType<typeof setTimeout> | null = null;
@@ -65,9 +67,12 @@ export class GameRoomDO extends DurableObject<Env> {
           case 'start-game': return this.handleStartGame(server);
           case 'place-bid': return this.handlePlaceBid(server, msg.payload);
           case 'play-card': return this.handlePlayCard(server, msg.payload);
+          case 'submit-tricks': return this.handleSubmitTricks(server, msg.payload);
           case 'continue-round': return this.handleContinueRound(server);
           case 'add-bot': return this.handleAddBot(server);
           case 'remove-bot': return this.handleRemoveBot(server, msg.payload);
+          case 'add-player': return this.handleAddPlayer(server, msg.payload);
+          case 'remove-player': return this.handleRemovePlayer(server, msg.payload);
           case 'chat': return this.handleChat(server, msg.payload);
           case 'report': return this.handleReport(server, msg.payload);
           case 'voice-track': return this.handleVoiceTrack(server, msg.payload);
@@ -103,9 +108,13 @@ export class GameRoomDO extends DurableObject<Env> {
 
   // ── Event handlers ─────────────────────────────────────────────────
 
-  private handleCreateRoom(ws: WebSocket, payload: { playerName: string }): void {
+  private handleCreateRoom(ws: WebSocket, payload: { playerName: string; mode?: GameMode }): void {
     const name = sanitizeName(payload.playerName);
-    if (!name) {
+    const mode: GameMode = payload.mode === 'inPerson' ? 'inPerson' : 'digital';
+
+    // Digital mode requires a name for the host's player; in-person mode uses
+    // the host only as a scorekeeper and doesn't display their name anywhere.
+    if (mode === 'digital' && !name) {
       this.sendError(ws, 'Name cannot be empty');
       return;
     }
@@ -113,7 +122,7 @@ export class GameRoomDO extends DurableObject<Env> {
     const roomCode = this.getRoomCode();
     const playerId = generatePlayerId();
 
-    this.initState(roomCode, playerId, name);
+    this.initState(roomCode, playerId, name || 'Host', mode);
     this.setPlayerSocket(playerId, ws);
 
     this.send(ws, {
@@ -135,13 +144,30 @@ export class GameRoomDO extends DurableObject<Env> {
       return;
     }
 
+    // In-person mode: joiners become spectators (host controls all players from one device).
+    if (this.state.mode === 'inPerson') {
+      if (this.state.spectators.length >= 20) {
+        this.sendError(ws, 'Too many spectators');
+        return;
+      }
+      const spectatorId = generateSpectatorId();
+      this.state.spectators.push({ id: spectatorId, name, connected: true });
+      this.setPlayerSocket(spectatorId, ws);
+      this.send(ws, {
+        type: 'room-joined',
+        payload: { roomCode: this.state.roomId, playerId: spectatorId },
+      });
+      this.broadcastGameState();
+      return;
+    }
+
     if (this.state.phase !== 'lobby') {
       this.sendError(ws, 'Game already in progress');
       return;
     }
 
-    if (this.state.players.length >= 7) {
-      this.sendError(ws, 'Room is full (max 7 players)');
+    if (this.state.players.length >= 10) {
+      this.sendError(ws, 'Room is full (max 10 players)');
       return;
     }
 
@@ -166,6 +192,44 @@ export class GameRoomDO extends DurableObject<Env> {
       return;
     }
 
+    // Spectator rejoin (in-person mode)
+    const spectator = this.state.spectators.find(s => s.id === payload.playerId);
+    if (spectator) {
+      spectator.connected = true;
+      this.setPlayerSocket(payload.playerId, ws);
+      this.send(ws, {
+        type: 'room-joined',
+        payload: { roomCode: this.state.roomId, playerId: payload.playerId },
+      });
+      if (this.chatMessages.length > 0) {
+        this.send(ws, { type: 'chat-history', payload: this.chatMessages });
+      }
+      this.broadcastGameState();
+      return;
+    }
+
+    // In-person host rejoin (host isn't in players[])
+    if (this.state.mode === 'inPerson' && payload.playerId === this.state.hostId) {
+      const deadline = this.deadlineTimers.get(payload.playerId);
+      if (deadline) {
+        clearTimeout(deadline);
+        this.deadlineTimers.delete(payload.playerId);
+      }
+      this.disconnectedAt.delete(payload.playerId);
+      try { this.ctx.storage.deleteAlarm(); } catch { /* ignore */ }
+
+      this.setPlayerSocket(payload.playerId, ws);
+      this.send(ws, {
+        type: 'room-joined',
+        payload: { roomCode: this.state.roomId, playerId: payload.playerId },
+      });
+      if (this.chatMessages.length > 0) {
+        this.send(ws, { type: 'chat-history', payload: this.chatMessages });
+      }
+      this.broadcastGameState();
+      return;
+    }
+
     const player = this.state.players.find(p => p.id === payload.playerId);
     if (!player) {
       this.sendError(ws, 'Player not found in room');
@@ -174,7 +238,7 @@ export class GameRoomDO extends DurableObject<Env> {
 
     player.connected = true;
 
-    // Cancel disconnect timer and rejoin deadline
+    // Cancel lobby grace timer, rejoin deadline, and in-game disconnect timestamp
     const timer = this.disconnectTimers.get(payload.playerId);
     if (timer) {
       clearTimeout(timer);
@@ -185,6 +249,7 @@ export class GameRoomDO extends DurableObject<Env> {
       clearTimeout(deadline);
       this.deadlineTimers.delete(payload.playerId);
     }
+    this.disconnectedAt.delete(payload.playerId);
 
     // Cancel stale room alarm
     try {
@@ -236,9 +301,27 @@ export class GameRoomDO extends DurableObject<Env> {
     this.scheduleBotTurn();
   }
 
-  private handlePlaceBid(ws: WebSocket, payload: { bid: number }): void {
-    const playerId = this.getPlayerIdForSocket(ws);
-    if (!playerId) return;
+  private handlePlaceBid(ws: WebSocket, payload: { bid: number; targetPlayerId?: string }): void {
+    const callerId = this.getPlayerIdForSocket(ws);
+    if (!callerId) return;
+
+    // In-person mode: the host bids on behalf of whichever player's turn it is.
+    // In digital mode: each player bids for themselves; targetPlayerId is ignored.
+    let playerId: string;
+    if (this.state.mode === 'inPerson') {
+      if (callerId !== this.state.hostId) {
+        this.sendError(ws, 'Only the host can bid in in-person mode');
+        return;
+      }
+      const current = this.state.players[this.state.currentTurnIndex];
+      if (!current) {
+        this.sendError(ws, 'No active player');
+        return;
+      }
+      playerId = payload.targetPlayerId ?? current.id;
+    } else {
+      playerId = callerId;
+    }
 
     const success = this.placeBid(playerId, payload.bid);
     if (success) {
@@ -272,6 +355,56 @@ export class GameRoomDO extends DurableObject<Env> {
     }
   }
 
+  private handleSubmitTricks(ws: WebSocket, payload: { tricks: number; targetPlayerId?: string }): void {
+    const callerId = this.getPlayerIdForSocket(ws);
+    if (!callerId) return;
+
+    if (this.state.mode !== 'inPerson' || this.state.phase !== 'tricksEntry') {
+      this.sendError(ws, 'Not accepting tricks right now');
+      return;
+    }
+
+    if (callerId !== this.state.hostId) {
+      this.sendError(ws, 'Only the host can submit tricks in in-person mode');
+      return;
+    }
+
+    const targetId = payload.targetPlayerId ?? callerId;
+    const player = this.state.players.find(p => p.id === targetId);
+    if (!player) {
+      this.sendError(ws, 'Player not found');
+      return;
+    }
+
+    const tricks = Math.floor(payload.tricks);
+    if (!Number.isFinite(tricks) || tricks < 0 || tricks > this.state.cardsPerRound) {
+      this.sendError(ws, `Tricks must be 0–${this.state.cardsPerRound}`);
+      return;
+    }
+
+    this.state.submittedTricks = { ...this.state.submittedTricks, [targetId]: tricks };
+
+    const allSubmitted = this.state.players.every(p => this.state.submittedTricks[p.id] !== undefined);
+    if (allSubmitted) {
+      const total = Object.values(this.state.submittedTricks).reduce((a, b) => a + b, 0);
+      if (total === this.state.cardsPerRound) {
+        // Commit and end the round
+        for (const p of this.state.players) {
+          p.tricksWon = this.state.submittedTricks[p.id] ?? 0;
+        }
+        this.endRound();
+      } else {
+        // Sum mismatch: host sees a warning and can adjust. Submissions stay visible.
+        const msg = `Total tricks is ${total}, expected ${this.state.cardsPerRound}. Please fix and resubmit.`;
+        for (const socket of this.connections.values()) {
+          this.sendError(socket, msg);
+        }
+      }
+    }
+
+    this.broadcastGameState();
+  }
+
   private handleContinueRound(ws: WebSocket): void {
     const playerId = this.getPlayerIdForSocket(ws);
     if (!playerId) return;
@@ -294,8 +427,12 @@ export class GameRoomDO extends DurableObject<Env> {
       return;
     }
 
-    if (this.state.phase !== 'lobby' || this.state.players.length >= 7) {
+    if (this.state.phase !== 'lobby' || this.state.players.length >= 10) {
       this.sendError(ws, 'Cannot add bot (room full or game started)');
+      return;
+    }
+    if (this.state.mode === 'inPerson') {
+      this.sendError(ws, 'Bots are not available in in-person mode');
       return;
     }
 
@@ -337,20 +474,101 @@ export class GameRoomDO extends DurableObject<Env> {
     this.broadcastGameState();
   }
 
-  private handleChat(ws: WebSocket, payload: { text: string }): void {
-    const playerId = this.getPlayerIdForSocket(ws);
-    if (!playerId) return;
+  private handleAddPlayer(ws: WebSocket, payload: { playerName: string }): void {
+    const callerId = this.getPlayerIdForSocket(ws);
+    if (!callerId) return;
 
-    const player = this.state.players.find(p => p.id === playerId);
-    if (!player) return;
+    if (this.state.hostId !== callerId) {
+      this.sendError(ws, 'Only the host can add players');
+      return;
+    }
+
+    if (this.state.mode !== 'inPerson') {
+      this.sendError(ws, 'Adding named players is only allowed in in-person mode');
+      return;
+    }
+
+    if (this.state.phase !== 'lobby') {
+      this.sendError(ws, 'Can only add players from the lobby');
+      return;
+    }
+
+    if (this.state.players.length >= 10) {
+      this.sendError(ws, 'Room is full (max 10 players)');
+      return;
+    }
+
+    const name = sanitizeName(payload.playerName);
+    if (!name) {
+      this.sendError(ws, 'Name cannot be empty');
+      return;
+    }
+
+    const slotId = `slot_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    this.state.players.push({
+      id: slotId,
+      name,
+      connected: true,
+      isBot: false,
+      hand: [],
+      bid: null,
+      tricksWon: 0,
+    });
+    this.state.scores[slotId] = 0;
+    this.broadcastGameState();
+  }
+
+  private handleRemovePlayer(ws: WebSocket, payload: { playerId: string }): void {
+    const callerId = this.getPlayerIdForSocket(ws);
+    if (!callerId) return;
+
+    if (this.state.hostId !== callerId) {
+      this.sendError(ws, 'Only the host can remove players');
+      return;
+    }
+
+    if (this.state.mode !== 'inPerson') {
+      this.sendError(ws, 'Removing players is only allowed in in-person mode');
+      return;
+    }
+
+    if (this.state.phase !== 'lobby') {
+      this.sendError(ws, 'Can only remove players from the lobby');
+      return;
+    }
+
+    if (payload.playerId === this.state.hostId) {
+      this.sendError(ws, 'Host cannot remove themselves');
+      return;
+    }
+
+    const target = this.state.players.find(p => p.id === payload.playerId);
+    if (!target) {
+      this.sendError(ws, 'Player not found');
+      return;
+    }
+
+    this.state.players = this.state.players.filter(p => p.id !== payload.playerId);
+    delete this.state.scores[payload.playerId];
+    this.broadcastGameState();
+  }
+
+  private handleChat(ws: WebSocket, payload: { text: string }): void {
+    const senderId = this.getPlayerIdForSocket(ws);
+    if (!senderId) return;
+
+    const player = this.state.players.find(p => p.id === senderId);
+    const spectator = player ? null : this.state.spectators.find(s => s.id === senderId);
+    const senderName = player?.name ?? spectator?.name;
+    if (!senderName) return;
 
     const text = payload.text.trim().slice(0, 200);
     if (!text) return;
 
     const chatMsg: ChatMessage = {
       id: crypto.randomUUID(),
-      playerId,
-      playerName: player.name,
+      playerId: senderId,
+      playerName: senderName,
       text,
       timestamp: Date.now(),
     };
@@ -389,6 +607,39 @@ export class GameRoomDO extends DurableObject<Env> {
 
     this.connections.delete(playerId);
 
+    // Spectator disconnect: remove silently (they can rejoin via /?join=CODE)
+    const spectatorIdx = this.state.spectators.findIndex(s => s.id === playerId);
+    if (spectatorIdx !== -1) {
+      this.state.spectators[spectatorIdx].connected = false;
+      if (this.allDisconnected()) {
+        this.ctx.storage.setAlarm(Date.now() + 10 * 60 * 1000);
+      }
+      this.broadcastGameState();
+      return;
+    }
+
+    // In-person host disconnect (not in players[])
+    if (this.state.mode === 'inPerson' && playerId === this.state.hostId) {
+      this.voiceTracks.delete(playerId);
+      this.disconnectedAt.set(playerId, Date.now());
+
+      if (this.state.phase !== 'lobby') {
+        const deadline = setTimeout(() => {
+          this.deadlineTimers.delete(playerId);
+          if (!this.connections.has(playerId)) {
+            this.endGameAbandoned();
+          }
+        }, 5 * 60 * 1000);
+        this.deadlineTimers.set(playerId, deadline);
+      }
+
+      if (this.allDisconnected()) {
+        this.ctx.storage.setAlarm(Date.now() + 10 * 60 * 1000);
+      }
+      this.broadcastGameState();
+      return;
+    }
+
     const player = this.state.players.find(p => p.id === playerId);
     if (!player || player.isBot) return;
 
@@ -425,24 +676,17 @@ export class GameRoomDO extends DurableObject<Env> {
       this.transferHost();
     }
 
-    // If 2+ humans are now disconnected during an active game, end it immediately
-    const disconnectedHumans = this.state.players.filter(p => !p.isBot && !p.connected).length;
-    if (disconnectedHumans >= 2 && this.state.phase !== 'gameOver') {
-      this.endGameAbandoned();
-      return;
-    }
+    // Record when they went offline. Two simultaneous backgroundings (phone
+    // locks, app switches) should NOT end the game — they usually come back
+    // within seconds. Auto-play kicks in only if it's their turn after the
+    // 60s grace (see scheduleBotTurn), and the 5-min deadline below ends
+    // the game only if they're actually gone.
+    this.disconnectedAt.set(playerId, Date.now());
 
     // Set stale room alarm if all disconnected
     if (this.allDisconnected()) {
       this.ctx.storage.setAlarm(Date.now() + 10 * 60 * 1000); // 10 min
     }
-
-    // 60s grace period then auto-play
-    const timer = setTimeout(() => {
-      this.disconnectTimers.delete(playerId);
-      this.autoPlayForDisconnected(playerId);
-    }, 60000);
-    this.disconnectTimers.set(playerId, timer);
 
     // 5-min deadline: if still disconnected, end the game
     const deadline = setTimeout(() => {
@@ -455,14 +699,22 @@ export class GameRoomDO extends DurableObject<Env> {
     this.deadlineTimers.set(playerId, deadline);
 
     this.broadcastGameState();
+    // If the current turn is now a disconnected human, schedule auto-play
+    // once grace elapses so the game doesn't stall.
+    this.scheduleBotTurn();
   }
 
   // ── Game logic ─────────────────────────────────────────────────────
 
-  private initState(roomId: string, hostId: string, hostName: string): void {
+  private initState(roomId: string, hostId: string, hostName: string, mode: GameMode): void {
+    // In digital mode, the host is also player 1 at the table.
+    // In in-person mode, the host is a pure scorekeeper — they add named
+    // player slots to the lobby and don't appear in players[] themselves.
+    const isDigital = mode === 'digital';
     this.state = {
       roomId,
-      players: [{
+      mode,
+      players: isDigital ? [{
         id: hostId,
         name: hostName,
         connected: true,
@@ -470,7 +722,8 @@ export class GameRoomDO extends DurableObject<Env> {
         hand: [],
         bid: null,
         tricksWon: 0,
-      }],
+      }] : [],
+      spectators: [],
       phase: 'lobby',
       dealerIndex: 0,
       currentTurnIndex: 0,
@@ -483,18 +736,19 @@ export class GameRoomDO extends DurableObject<Env> {
       trickWinner: null,
       trickNumber: 0,
       leadPlayerIndex: 0,
-      scores: { [hostId]: 0 },
+      scores: isDigital ? { [hostId]: 0 } : {},
       roundScores: [],
       completedTricks: [],
       roundSequence: [],
       hostId,
+      submittedTricks: {},
     };
     this.initialized = true;
   }
 
   private addPlayer(playerId: string, playerName: string): boolean {
     if (this.state.phase !== 'lobby') return false;
-    if (this.state.players.length >= 7) return false;
+    if (this.state.players.length >= 10) return false;
     if (this.state.players.some(p => p.id === playerId)) return false;
 
     this.state.players.push({
@@ -518,22 +772,31 @@ export class GameRoomDO extends DurableObject<Env> {
     this.state.trickWinner = null;
     this.state.completedTricks = [];
     this.state.roundScores = [];
+    this.state.submittedTricks = {};
 
     for (const player of this.state.players) {
       player.bid = null;
       player.tricksWon = 0;
+      player.hand = [];
     }
 
-    const deck = shuffleDeck(createDeck());
-    const { hands, remaining } = dealCards(deck, this.state.players.length, this.state.cardsPerRound);
+    if (this.state.mode === 'digital') {
+      const numDecks = numDecksForPlayers(this.state.players.length);
+      const deck = shuffleDeck(createDeck(numDecks));
+      const { hands, remaining } = dealCards(deck, this.state.players.length, this.state.cardsPerRound);
 
-    for (let i = 0; i < this.state.players.length; i++) {
-      this.state.players[i].hand = sortHand(hands[i]);
+      for (let i = 0; i < this.state.players.length; i++) {
+        this.state.players[i].hand = sortHand(hands[i]);
+      }
+
+      const trumpCard = determineTrump(remaining);
+      this.state.trumpCard = trumpCard;
+      this.state.trumpSuit = trumpCard ? trumpCard.suit : null;
+    } else {
+      // In-person: no dealing, no trump tracking in the app
+      this.state.trumpCard = null;
+      this.state.trumpSuit = null;
     }
-
-    const trumpCard = determineTrump(remaining);
-    this.state.trumpCard = trumpCard;
-    this.state.trumpSuit = trumpCard ? trumpCard.suit : null;
 
     this.state.currentTurnIndex = (this.state.dealerIndex + 1) % this.state.players.length;
     this.state.phase = 'bidding';
@@ -569,11 +832,17 @@ export class GameRoomDO extends DurableObject<Env> {
 
     const allBid = this.state.players.every(p => p.bid !== null);
     if (allBid) {
-      this.state.phase = 'playing';
-      this.state.trickNumber = 1;
-      this.state.leadPlayerIndex = (this.state.dealerIndex + 1) % this.state.players.length;
-      this.state.currentTurnIndex = this.state.leadPlayerIndex;
-      this.state.currentTrick = [];
+      if (this.state.mode === 'inPerson') {
+        // Skip trick-by-trick play; collect final tricks-won from each player
+        this.state.phase = 'tricksEntry';
+        this.state.submittedTricks = {};
+      } else {
+        this.state.phase = 'playing';
+        this.state.trickNumber = 1;
+        this.state.leadPlayerIndex = (this.state.dealerIndex + 1) % this.state.players.length;
+        this.state.currentTurnIndex = this.state.leadPlayerIndex;
+        this.state.currentTrick = [];
+      }
     } else {
       this.state.currentTurnIndex = (this.state.currentTurnIndex + 1) % this.state.players.length;
     }
@@ -759,43 +1028,66 @@ export class GameRoomDO extends DurableObject<Env> {
   private scheduleBotTurn(): void {
     if (!this.initialized) return;
     if (this.state.phase !== 'bidding' && this.state.phase !== 'playing') return;
+    // In-person mode: the host drives all bids manually; slots never auto-play.
+    if (this.state.mode === 'inPerson') return;
 
     const currentPlayer = this.state.players[this.state.currentTurnIndex];
-    if (!currentPlayer?.isBot) return;
+    if (!currentPlayer) return;
 
-    const expectedBotId = currentPlayer.id;
-    const delay = 1000 + Math.random() * 1000;
-
-    if (this.botTurnTimer !== null) clearTimeout(this.botTurnTimer);
-    this.botTurnTimer = setTimeout(() => {
+    if (this.botTurnTimer !== null) {
+      clearTimeout(this.botTurnTimer);
       this.botTurnTimer = null;
-      if (!this.initialized) return;
-      const bot = this.state.players[this.state.currentTurnIndex];
-      if (!bot || bot.id !== expectedBotId || !bot.isBot) return;
+    }
 
-      if (this.state.phase === 'bidding') {
-        const bid = decideBid(bot, this.state);
-        this.placeBid(bot.id, bid);
-        this.broadcastGameState();
-        this.scheduleBotTurn();
-      } else if (this.state.phase === 'playing') {
-        const cardId = decideCard(bot, this.state);
-        const result = this.playCard(bot.id, cardId);
-        if (result === 'trick-complete') {
-          this.broadcastGameState();
-          if (this.trickResolveTimer !== null) clearTimeout(this.trickResolveTimer);
-          this.trickResolveTimer = setTimeout(() => {
-            this.trickResolveTimer = null;
-            this.resolveTrick();
-            this.broadcastGameState();
-            this.scheduleBotTurn();
-          }, 2500);
-        } else if (result) {
+    if (currentPlayer.isBot) {
+      const expectedBotId = currentPlayer.id;
+      const delay = 1000 + Math.random() * 1000;
+      this.botTurnTimer = setTimeout(() => {
+        this.botTurnTimer = null;
+        if (!this.initialized) return;
+        const bot = this.state.players[this.state.currentTurnIndex];
+        if (!bot || bot.id !== expectedBotId || !bot.isBot) return;
+
+        if (this.state.phase === 'bidding') {
+          const bid = decideBid(bot, this.state);
+          this.placeBid(bot.id, bid);
           this.broadcastGameState();
           this.scheduleBotTurn();
+        } else if (this.state.phase === 'playing') {
+          const cardId = decideCard(bot, this.state);
+          const result = this.playCard(bot.id, cardId);
+          if (result === 'trick-complete') {
+            this.broadcastGameState();
+            if (this.trickResolveTimer !== null) clearTimeout(this.trickResolveTimer);
+            this.trickResolveTimer = setTimeout(() => {
+              this.trickResolveTimer = null;
+              this.resolveTrick();
+              this.broadcastGameState();
+              this.scheduleBotTurn();
+            }, 2500);
+          } else if (result) {
+            this.broadcastGameState();
+            this.scheduleBotTurn();
+          }
         }
-      }
-    }, delay);
+      }, delay);
+      return;
+    }
+
+    // Disconnected human at the wheel: auto-play only after the grace period
+    // so brief backgrounding (phone lock, app switch) doesn't cost them a turn.
+    if (!currentPlayer.connected) {
+      const expectedPlayerId = currentPlayer.id;
+      const disconnectedAt = this.disconnectedAt.get(expectedPlayerId) ?? Date.now();
+      const remaining = Math.max(0, 60_000 - (Date.now() - disconnectedAt));
+      this.botTurnTimer = setTimeout(() => {
+        this.botTurnTimer = null;
+        if (!this.initialized) return;
+        const p = this.state.players[this.state.currentTurnIndex];
+        if (!p || p.id !== expectedPlayerId || p.connected || p.isBot) return;
+        this.autoPlayForDisconnected(p.id);
+      }, remaining);
+    }
   }
 
   // ── Broadcasting ───────────────────────────────────────────────────
@@ -811,6 +1103,7 @@ export class GameRoomDO extends DurableObject<Env> {
 
   private getClientState(playerId: string): ClientGameState {
     const myIndex = this.state.players.findIndex(p => p.id === playerId);
+    const isSpectator = myIndex === -1 && this.state.spectators.some(s => s.id === playerId);
     const myHand = myIndex >= 0 ? this.state.players[myIndex].hand : [];
 
     const clientPlayers: ClientPlayer[] = this.state.players.map((p, i) => ({
@@ -827,8 +1120,11 @@ export class GameRoomDO extends DurableObject<Env> {
 
     return {
       roomId: this.state.roomId,
+      mode: this.state.mode,
       playerId,
+      isSpectator,
       players: clientPlayers,
+      spectators: this.state.spectators.map(s => ({ ...s })),
       phase: this.state.phase,
       hand: myHand,
       dealerIndex: this.state.dealerIndex,
@@ -848,6 +1144,7 @@ export class GameRoomDO extends DurableObject<Env> {
       hostId: this.state.hostId,
       myIndex,
       voiceTracks: [...this.voiceTracks.entries()].map(([pid, t]) => ({ playerId: pid, ...t })),
+      submittedTricks: this.state.submittedTricks,
     };
   }
 
@@ -880,7 +1177,7 @@ export class GameRoomDO extends DurableObject<Env> {
   }
 
   private allDisconnected(): boolean {
-    return this.state.players.every(p => p.isBot || !p.connected);
+    return this.connections.size === 0;
   }
 
   private getRoomCode(): string {
@@ -897,4 +1194,8 @@ function sanitizeName(name: string): string {
 
 function generatePlayerId(): string {
   return `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+}
+
+function generateSpectatorId(): string {
+  return `spectator_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 }
