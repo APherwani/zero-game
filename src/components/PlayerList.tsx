@@ -1,5 +1,6 @@
 'use client';
 
+import { Fragment } from 'react';
 import type { ClientPlayer } from '@/lib/types';
 
 interface PlayerListProps {
@@ -18,32 +19,43 @@ export default function PlayerList({ players, myIndex, phase }: PlayerListProps)
         ...players.slice(0, myIndex),
       ];
 
+  const showArrows = phase !== 'lobby';
+
   return (
-    <div className="flex flex-wrap justify-center gap-2 px-2">
-      {reordered.map((p) => (
-        <div
-          key={p.id}
-          className={`
-            px-3 py-2 rounded-lg text-xs font-medium
-            flex flex-col items-center gap-0.5
-            transition-all
-            ${p.isCurrentTurn ? 'bg-yellow-500/30 ring-2 ring-yellow-400' : 'bg-gray-800/60'}
-            ${!p.isBot && !p.connected ? 'opacity-40' : ''}
-          `}
-        >
-          <div className="flex items-center gap-1">
-            {p.isBot && <span className="text-[10px]">{'\u{1F916}'}</span>}
-            <span className="text-white font-semibold">{p.name}</span>
-            {p.isDealer && <span className="text-yellow-400 text-[10px]">D</span>}
-            {!p.isBot && !p.connected && <span className="text-red-400 text-[10px]">●</span>}
-          </div>
-          {phase !== 'lobby' && (
-            <div className="flex gap-2 text-white/60">
-              {p.bid !== null && <span>Bid: {p.bid}</span>}
-              <span>Won: {p.tricksWon}</span>
+    <div className="flex flex-wrap justify-center items-stretch gap-2 px-2">
+      {reordered.map((p, i) => (
+        <Fragment key={p.id}>
+          <div
+            className={`
+              px-3 py-2 rounded-lg text-xs font-medium
+              flex flex-col items-center gap-0.5
+              transition-all
+              ${p.isCurrentTurn ? 'bg-yellow-500/30 ring-2 ring-yellow-400' : 'bg-gray-800/60'}
+              ${!p.isBot && !p.connected ? 'opacity-40' : ''}
+            `}
+          >
+            <div className="flex items-center gap-1">
+              {p.isBot && <span className="text-[10px]">{'\u{1F916}'}</span>}
+              <span className="text-white font-semibold">{p.name}</span>
+              {p.isDealer && <span className="text-yellow-400 text-[10px]">D</span>}
+              {!p.isBot && !p.connected && <span className="text-red-400 text-[10px]">●</span>}
             </div>
+            {phase !== 'lobby' && (
+              <div className="flex gap-2 text-white/60">
+                {p.bid !== null && <span>Bid: {p.bid}</span>}
+                <span>Won: {p.tricksWon}</span>
+              </div>
+            )}
+          </div>
+          {showArrows && i < reordered.length - 1 && (
+            <span
+              aria-hidden
+              className="self-center text-white/25 text-sm select-none"
+            >
+              {'\u2192'}
+            </span>
           )}
-        </div>
+        </Fragment>
       ))}
     </div>
   );
