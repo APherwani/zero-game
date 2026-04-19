@@ -17,7 +17,9 @@ export interface Player {
   tricksWon: number;
 }
 
-export type GamePhase = 'lobby' | 'bidding' | 'playing' | 'roundEnd' | 'gameOver';
+export type GamePhase = 'lobby' | 'bidding' | 'playing' | 'tricksEntry' | 'roundEnd' | 'gameOver';
+
+export type GameMode = 'digital' | 'inPerson';
 
 export interface TrickCard {
   card: Card;
@@ -39,9 +41,17 @@ export interface CompletedTrick {
   winnerId: string;
 }
 
+export interface Spectator {
+  id: string;
+  name: string;
+  connected: boolean;
+}
+
 export interface GameState {
   roomId: string;
+  mode: GameMode;
   players: Player[];
+  spectators: Spectator[];
   phase: GamePhase;
   dealerIndex: number;
   currentTurnIndex: number;
@@ -59,6 +69,7 @@ export interface GameState {
   completedTricks: CompletedTrick[];
   roundSequence: number[];
   hostId: string;
+  submittedTricks: Record<string, number>; // in-person mode: playerId -> tricks won (this round)
 }
 
 export interface ClientPlayer {
@@ -81,8 +92,11 @@ export interface VoiceTrack {
 
 export interface ClientGameState {
   roomId: string;
+  mode: GameMode;
   playerId: string;
+  isSpectator: boolean;
   players: ClientPlayer[];
+  spectators: Spectator[];
   phase: GamePhase;
   hand: Card[];
   dealerIndex: number;
@@ -102,6 +116,7 @@ export interface ClientGameState {
   hostId: string;
   myIndex: number;
   voiceTracks: VoiceTrack[];
+  submittedTricks: Record<string, number>;
 }
 
 // WebSocket message types are defined in ws-protocol.ts

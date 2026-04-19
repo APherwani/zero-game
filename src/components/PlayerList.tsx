@@ -9,11 +9,14 @@ interface PlayerListProps {
 }
 
 export default function PlayerList({ players, myIndex, phase }: PlayerListProps) {
-  // Reorder players so current player is last (bottom), others arranged around
-  const reordered = [
-    ...players.slice(myIndex + 1),
-    ...players.slice(0, myIndex),
-  ];
+  // Reorder players so current player is last (bottom), others arranged around.
+  // For spectators (myIndex < 0), show all players in natural order.
+  const reordered = myIndex < 0
+    ? players
+    : [
+        ...players.slice(myIndex + 1),
+        ...players.slice(0, myIndex),
+      ];
 
   return (
     <div className="flex flex-wrap justify-center gap-2 px-2">

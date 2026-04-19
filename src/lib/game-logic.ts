@@ -8,14 +8,24 @@ const RANK_ORDER: Record<Rank, number> = {
   '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14,
 };
 
-export function createDeck(): Card[] {
+export function createDeck(numDecks: number = 1): Card[] {
   const deck: Card[] = [];
-  for (const suit of SUITS) {
-    for (const rank of RANKS) {
-      deck.push({ suit, rank, id: `${suit}-${rank}` });
+  for (let d = 0; d < numDecks; d++) {
+    for (const suit of SUITS) {
+      for (const rank of RANKS) {
+        // Instance-unique id (suit-rank#deckIndex) so two copies of the same
+        // card in a multi-deck game can be distinguished by the hand/server/UI.
+        deck.push({ suit, rank, id: `${suit}-${rank}#${d}` });
+      }
     }
   }
   return deck;
+}
+
+export function numDecksForPlayers(numPlayers: number): number {
+  // One deck (52 cards) fits up to 7 players (7*7 + 1 trump = 50 ≤ 52).
+  // From 8 players on we need a second deck.
+  return numPlayers >= 8 ? 2 : 1;
 }
 
 export function shuffleDeck(deck: Card[]): Card[] {

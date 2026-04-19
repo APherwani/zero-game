@@ -12,6 +12,7 @@ import BiddingPanel from '@/components/BiddingPanel';
 import Hand from '@/components/Hand';
 import TrickPile from '@/components/TrickPile';
 import Scoreboard from '@/components/Scoreboard';
+import TricksEntryPanel from '@/components/TricksEntryPanel';
 import VoiceChat from '@/components/VoiceChat';
 
 export default function GamePage() {
@@ -22,7 +23,7 @@ export default function GamePage() {
   const { send, subscribe, connected, disconnect } = useWebSocket(roomCode);
 
   const { sound, muted, toggleMute } = useSound();
-  const { gameState, error, placeBid, playCard, continueRound, rejoinRoom } = useGameSocket(send, subscribe, sound);
+  const { gameState, error, placeBid, playCard, submitTricks, continueRound, rejoinRoom } = useGameSocket(send, subscribe, sound);
 
   // On mount, try to rejoin if we have stored session
   useEffect(() => {
@@ -68,6 +69,9 @@ export default function GamePage() {
   const isMyTurn = gameState.currentTurnIndex === gameState.myIndex;
   const isTrickRevealing = gameState.trickWinner !== null;
   const leadSuit = gameState.currentTrick.length > 0 ? gameState.currentTrick[0].card.suit : null;
+  const me = gameState.myIndex >= 0 ? gameState.players[gameState.myIndex] : null;
+  const isSpectator = gameState.isSpectator;
+  const isHostScorekeeper = gameState.mode === 'inPerson' && gameState.playerId === gameState.hostId && !me;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col">
@@ -95,10 +99,12 @@ export default function GamePage() {
         <PlayerList players={gameState.players} myIndex={gameState.myIndex} phase={gameState.phase} />
       </div>
 
-      {/* Voice chat */}
-      <div className="pb-2 px-4">
-        <VoiceChat gameState={gameState} send={send} />
-      </div>
+      {/* Voice chat — digital mode only */}
+      {gameState.mode === 'digital' && (
+        <div className="pb-2 px-4">
+          <VoiceChat gameState={gameState} send={send} />
+        </div>
+      )}
 
       {/* Center area */}
       <div className="flex-1 flex flex-col items-center justify-center px-4">
@@ -106,7 +112,7 @@ export default function GamePage() {
           <BiddingPanel gameState={gameState} onPlaceBid={placeBid} sound={sound} />
         )}
 
-        {gameState.phase === 'playing' && (
+        {gameState.phase === 'playing' && gameState.mode === 'digital' && (
           <TrickArea
             currentTrick={gameState.currentTrick}
             players={gameState.players}
@@ -115,11 +121,15 @@ export default function GamePage() {
           />
         )}
 
-        {gameState.phase === 'playing' && gameState.completedTricks.length > 0 && (
+        {gameState.phase === 'playing' && gameState.mode === 'digital' && gameState.completedTricks.length > 0 && (
           <TrickPile
             completedTricks={gameState.completedTricks}
             players={gameState.players}
           />
+        )}
+
+        {gameState.phase === 'tricksEntry' && (
+          <TricksEntryPanel gameState={gameState} onSubmitTricks={submitTricks} />
         )}
 
         {(gameState.phase === 'roundEnd' || gameState.phase === 'gameOver') && (
@@ -134,15 +144,13 @@ export default function GamePage() {
         )}
       </div>
 
-      {/* My info bar */}
-      {gameState.phase !== 'roundEnd' && gameState.phase !== 'gameOver' && (
+      {/* My info bar — players only, not spectators */}
+      {me && gameState.phase !== 'roundEnd' && gameState.phase !== 'gameOver' && (
         <div className="flex items-center justify-center gap-4 py-2 bg-gray-900/50">
-          <span className="text-white font-medium text-sm">
-            {gameState.players[gameState.myIndex]?.name}
-          </span>
-          {gameState.players[gameState.myIndex]?.bid !== null && (
+          <span className="text-white font-medium text-sm">{me.name}</span>
+          {me.bid !== null && (
             <span className="text-white/60 text-xs">
-              Bid: {gameState.players[gameState.myIndex]?.bid} | Won: {gameState.players[gameState.myIndex]?.tricksWon}
+              Bid: {me.bid} | Won: {me.tricksWon}
             </span>
           )}
           <span className="text-white/40 text-xs">
@@ -151,17 +159,31 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* Hand */}
-      <div className="pb-safe">
-        <Hand
-          cards={gameState.hand}
-          isMyTurn={isMyTurn && !isTrickRevealing}
-          leadSuit={leadSuit}
-          onPlayCard={playCard}
-          phase={gameState.phase}
-          sound={sound}
-        />
-      </div>
+      {isSpectator && gameState.phase !== 'roundEnd' && gameState.phase !== 'gameOver' && (
+        <div className="flex items-center justify-center gap-2 py-2 bg-gray-900/50">
+          <span className="text-blue-300 text-xs uppercase tracking-wide font-semibold">Spectating</span>
+        </div>
+      )}
+
+      {isHostScorekeeper && gameState.phase !== 'roundEnd' && gameState.phase !== 'gameOver' && (
+        <div className="flex items-center justify-center gap-2 py-2 bg-gray-900/50">
+          <span className="text-yellow-300 text-xs uppercase tracking-wide font-semibold">Scorekeeper</span>
+        </div>
+      )}
+
+      {/* Hand — only shown in digital mode */}
+      {gameState.mode === 'digital' && (
+        <div className="pb-safe">
+          <Hand
+            cards={gameState.hand}
+            isMyTurn={isMyTurn && !isTrickRevealing}
+            leadSuit={leadSuit}
+            onPlayCard={playCard}
+            phase={gameState.phase}
+            sound={sound}
+          />
+        </div>
+      )}
     </div>
   );
 }

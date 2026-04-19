@@ -23,7 +23,10 @@ function getRadii(playerCount: number): { rx: number; ry: number } {
   if (playerCount <= 4) return { rx: 110, ry: 68 };
   if (playerCount <= 5) return { rx: 125, ry: 78 };
   if (playerCount <= 6) return { rx: 138, ry: 84 };
-  return { rx: 148, ry: 90 }; // 7 players
+  if (playerCount <= 7) return { rx: 148, ry: 90 };
+  if (playerCount <= 8) return { rx: 160, ry: 96 };
+  if (playerCount <= 9) return { rx: 172, ry: 102 };
+  return { rx: 182, ry: 108 }; // 10 players
 }
 
 function getContainerSize(playerCount: number): { w: number; h: number } {
@@ -31,7 +34,10 @@ function getContainerSize(playerCount: number): { w: number; h: number } {
   if (playerCount <= 4) return { w: 310, h: 230 };
   if (playerCount <= 5) return { w: 340, h: 250 };
   if (playerCount <= 6) return { w: 360, h: 260 };
-  return { w: 380, h: 270 }; // 7 players
+  if (playerCount <= 7) return { w: 380, h: 270 };
+  if (playerCount <= 8) return { w: 405, h: 285 };
+  if (playerCount <= 9) return { w: 425, h: 295 };
+  return { w: 445, h: 305 }; // 10 players
 }
 
 export default function TrickArea({ currentTrick, players, myIndex, trickWinner }: TrickAreaProps) {
