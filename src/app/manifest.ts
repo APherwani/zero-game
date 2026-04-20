@@ -13,13 +13,13 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [
       {
         src: '/zero-game-icon.png',
-        sizes: '192x192 512x512 1024x1024',
+        sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
       },
       {
         src: '/zero-game-icon.png',
-        sizes: '192x192 512x512 1024x1024',
+        sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
       },
