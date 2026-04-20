@@ -14,7 +14,16 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Zero Game",
-  description: "Real-time multiplayer Zero Game card game",
+  description: "Call your tricks. Hit them exact, or get zero.",
+  applicationName: "Zero Game",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Zero Game",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport: Viewport = {
@@ -22,6 +31,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#052e16",
 };
 
 export default function RootLayout({

@@ -305,25 +305,73 @@ export class GameRoomDO extends DurableObject<Env> {
     const callerId = this.getPlayerIdForSocket(ws);
     if (!callerId) return;
 
-    // In-person mode: the host bids on behalf of whichever player's turn it is.
-    // In digital mode: each player bids for themselves; targetPlayerId is ignored.
-    let playerId: string;
+    // In-person mode: the host drives bidding for any player. Submitting for
+    // the current-turn player advances the turn like normal; submitting for
+    // a player who has already bid is treated as an edit (misclick correction)
+    // and doesn't touch turn state. Also allowed during tricksEntry so the
+    // host can fix a bid they realize was wrong after all bids were in.
     if (this.state.mode === 'inPerson') {
       if (callerId !== this.state.hostId) {
         this.sendError(ws, 'Only the host can bid in in-person mode');
         return;
       }
-      const current = this.state.players[this.state.currentTurnIndex];
-      if (!current) {
-        this.sendError(ws, 'No active player');
+      if (this.state.phase !== 'bidding' && this.state.phase !== 'tricksEntry') {
+        this.sendError(ws, 'Bids can only be edited during bidding or tricks entry');
         return;
       }
-      playerId = payload.targetPlayerId ?? current.id;
-    } else {
-      playerId = callerId;
+
+      const current = this.state.players[this.state.currentTurnIndex];
+      const targetId = payload.targetPlayerId ?? current?.id;
+      const playerIdx = this.state.players.findIndex(p => p.id === targetId);
+      if (playerIdx === -1) {
+        this.sendError(ws, 'Player not found');
+        return;
+      }
+      const player = this.state.players[playerIdx];
+
+      const bid = Math.floor(payload.bid);
+      if (!Number.isFinite(bid) || bid < 0 || bid > this.state.cardsPerRound) {
+        this.sendError(ws, `Bid must be 0–${this.state.cardsPerRound}`);
+        return;
+      }
+
+      // Hook rule: dealer's bid cannot make the total equal cards-per-round
+      // once everyone else has bid. Applied whether this is a first bid or an
+      // edit, so the app never stores an illegal combo.
+      if (playerIdx === this.state.dealerIndex) {
+        const otherBids = this.state.players
+          .filter(p => p.id !== player.id && p.bid !== null)
+          .map(p => p.bid!);
+        if (otherBids.length === this.state.players.length - 1) {
+          const sum = otherBids.reduce((a, b) => a + b, 0);
+          if (sum + bid === this.state.cardsPerRound) {
+            this.sendError(ws, `Hook rule: dealer cannot bid ${bid}`);
+            return;
+          }
+        }
+      }
+
+      const isFirstBid = player.bid === null;
+      player.bid = bid;
+
+      // Only advance turn / transition phase on a true first bid during the
+      // bidding phase — edits preserve whatever phase we're in.
+      if (isFirstBid && this.state.phase === 'bidding' && playerIdx === this.state.currentTurnIndex) {
+        const allBid = this.state.players.every(p => p.bid !== null);
+        if (allBid) {
+          this.state.phase = 'tricksEntry';
+          this.state.submittedTricks = {};
+        } else {
+          this.state.currentTurnIndex = (this.state.currentTurnIndex + 1) % this.state.players.length;
+        }
+      }
+
+      this.broadcastGameState();
+      return;
     }
 
-    const success = this.placeBid(playerId, payload.bid);
+    // Digital mode: each player bids for themselves; targetPlayerId is ignored.
+    const success = this.placeBid(callerId, payload.bid);
     if (success) {
       this.broadcastGameState();
       this.scheduleBotTurn();

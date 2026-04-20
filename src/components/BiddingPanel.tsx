@@ -13,33 +13,67 @@ interface BiddingPanelProps {
 
 export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPanelProps) {
   const [selectedBid, setSelectedBid] = useState<number | null>(null);
+  // In-person host can tap a placed-bid chip to edit it (misclick fix).
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
 
   const isInPerson = gameState.mode === 'inPerson';
   const isHost = gameState.playerId === gameState.hostId;
   const isSpectator = gameState.isSpectator;
 
-  // In in-person mode, the host drives bidding for whoever's turn it is.
-  // In digital mode, only the player whose turn it is sees the input.
+  // The player being bid for — either the edit target (in-person) or the
+  // current-turn player (default).
   const currentPlayer = gameState.players[gameState.currentTurnIndex];
+  const editingPlayer = editingPlayerId
+    ? gameState.players.find(p => p.id === editingPlayerId)
+    : null;
+  const targetPlayer = editingPlayer ?? currentPlayer;
+  const isEditing = !!editingPlayer;
+
   const canBid = isInPerson ? isHost && !isSpectator : gameState.currentTurnIndex === gameState.myIndex;
-  const isCurrentDealer = gameState.dealerIndex === gameState.currentTurnIndex;
+
+  // Hook rule applies to the dealer. When editing, use the dealer-bid scenario
+  // for the target player only if they ARE the dealer.
+  const targetIdx = targetPlayer ? gameState.players.findIndex(p => p.id === targetPlayer.id) : -1;
+  const isTargetDealer = targetIdx === gameState.dealerIndex;
+  const otherBids = gameState.players
+    .filter((p) => p.id !== targetPlayer?.id && p.bid !== null)
+    .map((p) => p.bid!);
+  const othersAllBid = targetPlayer && otherBids.length === gameState.players.length - 1;
+  const blockedBid = isTargetDealer && othersAllBid
+    ? getBlockedBid(gameState.cardsPerRound, otherBids)
+    : null;
 
   const bidsPlaced = gameState.players
     .filter((p) => p.bid !== null)
     .map((p) => p.bid!);
-  const blockedBid = isCurrentDealer ? getBlockedBid(gameState.cardsPerRound, bidsPlaced) : null;
 
   const headline = isInPerson
-    ? (currentPlayer ? `${currentPlayer.name}'s bid` : 'Bidding')
+    ? (targetPlayer ? `${targetPlayer.name}'s bid${isEditing ? ' (edit)' : ''}` : 'Bidding')
     : (canBid ? 'Your Bid' : `Waiting for ${currentPlayer?.name}...`);
 
   const handleSubmit = () => {
-    if (selectedBid !== null) {
+    if (selectedBid !== null && targetPlayer) {
       sound?.bidPlaced();
-      onPlaceBid(selectedBid, isInPerson ? currentPlayer?.id : undefined);
+      onPlaceBid(selectedBid, isInPerson ? targetPlayer.id : undefined);
       setSelectedBid(null);
+      setEditingPlayerId(null);
     }
   };
+
+  const handleChipClick = (playerId: string) => {
+    if (!isInPerson || !canBid) return;
+    const p = gameState.players.find(pl => pl.id === playerId);
+    if (!p || p.bid === null) return;
+    setEditingPlayerId(playerId);
+    setSelectedBid(p.bid);
+  };
+
+  const cancelEdit = () => {
+    setEditingPlayerId(null);
+    setSelectedBid(null);
+  };
+
+  const isChipClickable = isInPerson && canBid;
 
   return (
     <div className="bg-gray-900/80 rounded-xl p-4 max-w-sm mx-auto">
@@ -50,7 +84,9 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
           {isSpectator
             ? 'The host is collecting bids at the table.'
             : isHost
-              ? 'Ask each player for their bid and enter it here.'
+              ? isEditing
+                ? 'Editing a previous bid. Pick the correct number and submit.'
+                : 'Ask each player for their bid. Tap a placed bid to fix it.'
               : 'Waiting for the host to enter bids.'}
         </p>
       )}
@@ -58,23 +94,27 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
       {/* Show other players' bids */}
       <div className="flex flex-wrap justify-center gap-2 mb-2">
         {gameState.players.map((p) => {
-          const isUp = p.id === currentPlayer?.id;
+          const isUp = p.id === targetPlayer?.id;
+          const hasBid = p.bid !== null;
+          const clickable = isChipClickable && hasBid;
+          const Comp = clickable ? 'button' : 'div';
           return (
-            <div
+            <Comp
               key={p.id}
-              className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                p.bid !== null
-                  ? 'bg-white/10 border-white/20 text-white'
-                  : isUp && isInPerson
-                    ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-200'
+              onClick={clickable ? () => handleChipClick(p.id) : undefined}
+              className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                isUp && isInPerson
+                  ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-200'
+                  : hasBid
+                    ? 'bg-white/10 border-white/20 text-white'
                     : 'bg-white/5 border-white/10 text-white/40'
-              }`}
+              } ${clickable ? 'cursor-pointer hover:border-yellow-400/40' : ''}`}
             >
               <span className="truncate max-w-[64px]">{p.name}</span>
-              <span className={`text-base font-bold mt-0.5 ${p.bid !== null ? 'text-yellow-400' : 'text-white/20'}`}>
-                {p.bid !== null ? p.bid : '—'}
+              <span className={`text-base font-bold mt-0.5 ${hasBid ? 'text-yellow-400' : 'text-white/20'}`}>
+                {hasBid ? p.bid : '\u2014'}
               </span>
-            </div>
+            </Comp>
           );
         })}
       </div>
@@ -86,7 +126,7 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
         <span className="text-white/40"> / {gameState.cardsPerRound} tricks</span>
       </div>
 
-      {canBid && (
+      {canBid && targetPlayer && (
         <>
           <div className="flex flex-wrap justify-center gap-2 mb-3">
             {Array.from({ length: gameState.cardsPerRound + 1 }, (_, i) => i).map((bid) => {
@@ -110,9 +150,9 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
             })}
           </div>
 
-          {isCurrentDealer && blockedBid !== null && (
+          {isTargetDealer && blockedBid !== null && (
             <p className="text-red-400 text-xs text-center mb-2">
-              Hook rule: {isInPerson ? `${currentPlayer?.name} cannot bid ${blockedBid}` : `you cannot bid ${blockedBid}`}
+              Hook rule: {isInPerson ? `${targetPlayer.name} cannot bid ${blockedBid}` : `you cannot bid ${blockedBid}`}
             </p>
           )}
 
@@ -125,9 +165,20 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
             `}
           >
             {selectedBid !== null
-              ? (isInPerson ? `Submit ${currentPlayer?.name}'s bid: ${selectedBid}` : `Bid ${selectedBid}`)
+              ? (isInPerson
+                  ? `${isEditing ? 'Update' : 'Submit'} ${targetPlayer.name}'s bid: ${selectedBid}`
+                  : `Bid ${selectedBid}`)
               : 'Select a bid'}
           </button>
+
+          {isEditing && (
+            <button
+              onClick={cancelEdit}
+              className="w-full mt-2 py-2 text-white/50 text-sm hover:text-white/80 transition-colors"
+            >
+              Cancel edit
+            </button>
+          )}
         </>
       )}
     </div>
