@@ -75,7 +75,7 @@ export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sou
   if ((phase !== 'playing' && phase !== 'bidding') || cards.length === 0) return null;
 
   return (
-    <div ref={containerRef} className="flex justify-center items-end gap-1 flex-wrap px-2 pb-4">
+    <div ref={containerRef} className="flex justify-center items-end gap-1 flex-wrap px-2 pb-2">
       {cards.map((card) => {
         const playable = phase === 'playing' && isMyTurn && isValidPlay(card, cards, leadSuit);
         const isDragging = dragState?.cardId === card.id;

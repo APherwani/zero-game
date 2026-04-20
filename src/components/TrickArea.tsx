@@ -19,25 +19,25 @@ interface TrickAreaProps {
  * Card width ~64px → need arc gap ≥ 72px for breathing room.
  */
 function getRadii(playerCount: number): { rx: number; ry: number } {
-  if (playerCount <= 3) return { rx: 90, ry: 58 };
-  if (playerCount <= 4) return { rx: 110, ry: 68 };
-  if (playerCount <= 5) return { rx: 125, ry: 78 };
-  if (playerCount <= 6) return { rx: 138, ry: 84 };
-  if (playerCount <= 7) return { rx: 148, ry: 90 };
-  if (playerCount <= 8) return { rx: 160, ry: 96 };
-  if (playerCount <= 9) return { rx: 172, ry: 102 };
-  return { rx: 182, ry: 108 }; // 10 players
+  if (playerCount <= 3) return { rx: 78, ry: 46 };
+  if (playerCount <= 4) return { rx: 94, ry: 54 };
+  if (playerCount <= 5) return { rx: 106, ry: 62 };
+  if (playerCount <= 6) return { rx: 118, ry: 68 };
+  if (playerCount <= 7) return { rx: 126, ry: 72 };
+  if (playerCount <= 8) return { rx: 136, ry: 78 };
+  if (playerCount <= 9) return { rx: 146, ry: 82 };
+  return { rx: 154, ry: 86 }; // 10 players
 }
 
 function getContainerSize(playerCount: number): { w: number; h: number } {
-  if (playerCount <= 3) return { w: 280, h: 210 };
-  if (playerCount <= 4) return { w: 310, h: 230 };
-  if (playerCount <= 5) return { w: 340, h: 250 };
-  if (playerCount <= 6) return { w: 360, h: 260 };
-  if (playerCount <= 7) return { w: 380, h: 270 };
-  if (playerCount <= 8) return { w: 405, h: 285 };
-  if (playerCount <= 9) return { w: 425, h: 295 };
-  return { w: 445, h: 305 }; // 10 players
+  if (playerCount <= 3) return { w: 240, h: 170 };
+  if (playerCount <= 4) return { w: 266, h: 186 };
+  if (playerCount <= 5) return { w: 290, h: 200 };
+  if (playerCount <= 6) return { w: 308, h: 212 };
+  if (playerCount <= 7) return { w: 324, h: 220 };
+  if (playerCount <= 8) return { w: 344, h: 232 };
+  if (playerCount <= 9) return { w: 362, h: 240 };
+  return { w: 378, h: 248 }; // 10 players
 }
 
 export default function TrickArea({ currentTrick, players, myIndex, trickWinner }: TrickAreaProps) {

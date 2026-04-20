@@ -87,7 +87,7 @@ export default function GamePage() {
 
       {/* Turn indicator */}
       {gameState.phase === 'playing' && (
-        <div className={`text-center py-2 text-sm font-medium ${isTrickRevealing ? 'text-yellow-400' : isMyTurn ? 'text-yellow-400' : 'text-white/50'}`}>
+        <div className={`text-center py-1 text-xs font-medium ${isTrickRevealing ? 'text-yellow-400' : isMyTurn ? 'text-yellow-400' : 'text-white/50'}`}>
           {isTrickRevealing
             ? `${gameState.players.find(p => p.id === gameState.trickWinner)?.name} wins the trick!`
             : isMyTurn ? 'Your turn — swipe up to play' : `Waiting for ${gameState.players[gameState.currentTurnIndex]?.name}...`}
@@ -95,13 +95,13 @@ export default function GamePage() {
       )}
 
       {/* Other players */}
-      <div className="pt-2 pb-1">
+      <div className="py-1">
         <PlayerList players={gameState.players} myIndex={gameState.myIndex} phase={gameState.phase} />
       </div>
 
       {/* Voice chat — digital mode only */}
       {gameState.mode === 'digital' && (
-        <div className="pb-2 px-4">
+        <div className="pb-1 px-4">
           <VoiceChat gameState={gameState} send={send} />
         </div>
       )}
@@ -146,8 +146,8 @@ export default function GamePage() {
 
       {/* My info bar — players only, not spectators */}
       {me && gameState.phase !== 'roundEnd' && gameState.phase !== 'gameOver' && (
-        <div className="flex items-center justify-center gap-4 py-2 bg-gray-900/50">
-          <span className="text-white font-medium text-sm">{me.name}</span>
+        <div className="flex items-center justify-center gap-4 py-1 bg-gray-900/50">
+          <span className="text-white font-medium text-xs">{me.name}</span>
           {me.bid !== null && (
             <span className="text-white/60 text-xs">
               Bid: {me.bid} | Won: {me.tricksWon}
@@ -160,14 +160,14 @@ export default function GamePage() {
       )}
 
       {isSpectator && gameState.phase !== 'roundEnd' && gameState.phase !== 'gameOver' && (
-        <div className="flex items-center justify-center gap-2 py-2 bg-gray-900/50">
-          <span className="text-blue-300 text-xs uppercase tracking-wide font-semibold">Spectating</span>
+        <div className="flex items-center justify-center gap-2 py-1 bg-gray-900/50">
+          <span className="text-blue-300 text-[10px] uppercase tracking-wide font-semibold">Spectating</span>
         </div>
       )}
 
       {isHostScorekeeper && gameState.phase !== 'roundEnd' && gameState.phase !== 'gameOver' && (
-        <div className="flex items-center justify-center gap-2 py-2 bg-gray-900/50">
-          <span className="text-yellow-300 text-xs uppercase tracking-wide font-semibold">Scorekeeper</span>
+        <div className="flex items-center justify-center gap-2 py-1 bg-gray-900/50">
+          <span className="text-yellow-300 text-[10px] uppercase tracking-wide font-semibold">Scorekeeper</span>
         </div>
       )}
 
