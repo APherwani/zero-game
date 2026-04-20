@@ -22,7 +22,7 @@ Zero Game is a real-time multiplayer trick-taking card game (in the style of "Oh
 
 ## Game Rules
 
-- **Players**: 3–7 (humans + bots)
+- **Players**: 3–10 (humans + bots)
 - **Rounds**: Number of rounds = number of players. Round 1 starts with N cards per player, counting down to 1 card in the final round.
 - **Trump**: After dealing, the top remaining card determines the trump suit.
 - **Bidding**: Each player bids how many tricks they expect to win. Bidding starts left of the dealer.

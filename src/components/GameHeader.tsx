@@ -20,7 +20,7 @@ export default function GameHeader({ gameState, muted, onToggleMute }: GameHeade
   }
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-gray-900/70">
+    <div className="flex items-center justify-between px-4 py-1.5 bg-gray-900/70">
       <div className="flex items-center gap-2">
         <div className="text-white text-sm">
           <span className="font-semibold">Round {gameState.roundNumber}</span>

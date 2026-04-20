@@ -42,16 +42,16 @@ export default function VoiceChat({ gameState, send }: VoiceChatProps) {
         {!joined ? (
           <button
             onClick={joinVoice}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-700/60 hover:bg-green-700/80 text-green-200 text-xs font-medium rounded-full border border-green-600/40 transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 bg-green-700/40 hover:bg-green-700/60 text-green-200/80 text-[10px] font-medium rounded-full border border-green-600/30 transition-colors"
           >
             <span>🎙</span>
-            <span>Join Voice</span>
+            <span>Join voice</span>
           </button>
         ) : (
           <>
             <button
               onClick={toggleMute}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
                 muted
                   ? 'bg-red-800/60 hover:bg-red-800/80 text-red-300 border-red-700/40'
                   : 'bg-green-700/60 hover:bg-green-700/80 text-green-200 border-green-600/40'
@@ -62,7 +62,7 @@ export default function VoiceChat({ gameState, send }: VoiceChatProps) {
             </button>
             <button
               onClick={leaveVoice}
-              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/70 text-xs rounded-full border border-white/10 transition-colors"
+              className="px-3 py-1 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/70 text-xs rounded-full border border-white/10 transition-colors"
             >
               Leave
             </button>
