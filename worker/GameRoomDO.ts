@@ -193,6 +193,15 @@ export class GameRoomDO extends DurableObject<Env> {
       return;
     }
 
+    // Reject if this room code is already in use. Clients now generate
+    // codes on-device (no /api/rooms round trip), so collisions are
+    // possible — the persisted state from a previous create must not be
+    // silently overwritten.
+    if (this.initialized) {
+      this.sendError(ws, 'Room code already in use. Please try again.');
+      return;
+    }
+
     const roomCode = this.getRoomCode();
     const playerId = generatePlayerId();
 
