@@ -113,7 +113,15 @@ export default function GamePage() {
 
       {/* Other players */}
       <div className="py-1">
-        <PlayerList players={gameState.players} myIndex={gameState.myIndex} phase={gameState.phase} />
+        <PlayerList
+          players={gameState.players}
+          myIndex={gameState.myIndex}
+          phase={gameState.phase}
+          trickWinner={gameState.trickWinner}
+          roundScores={gameState.roundScores}
+          roundNumber={gameState.roundNumber}
+          trickNumber={gameState.trickNumber}
+        />
       </div>
 
       {/* Voice chat — digital mode only */}

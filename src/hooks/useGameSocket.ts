@@ -37,13 +37,16 @@ export function useGameSocket(
       sound?.yourTurn();
     }
 
-    if (
-      gameState.trickWinner &&
-      gameState.trickWinner === gameState.playerId &&
-      prev.trickWinner !== gameState.trickWinner
-    ) {
-      navigator.vibrate?.(50);
-      sound?.trickWon();
+    // Trick-winner edge: fire when trickWinner first transitions from
+    // null/different to a real id. Stronger ping if you won, lighter
+    // for everyone else so the table all feels the moment land.
+    if (gameState.trickWinner && prev.trickWinner !== gameState.trickWinner) {
+      if (gameState.trickWinner === gameState.playerId) {
+        navigator.vibrate?.(50);
+        sound?.trickWon();
+      } else {
+        navigator.vibrate?.(20);
+      }
     }
 
     if (gameState.phase !== prev.phase) {
