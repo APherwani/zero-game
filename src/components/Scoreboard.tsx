@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import type { RoundScore } from '@/lib/types';
 import AnimatedNumber from './AnimatedNumber';
 
@@ -12,9 +13,12 @@ interface ScoreboardProps {
   onLeave: () => void;
 }
 
-export default function Scoreboard({ roundScores, scores, isGameOver, isHost, onContinue, onLeave }: ScoreboardProps) {
+function Scoreboard({ roundScores, scores, isGameOver, isHost, onContinue, onLeave }: ScoreboardProps) {
   // Sort by total score descending
-  const sorted = [...roundScores].sort((a, b) => b.totalScore - a.totalScore);
+  const sorted = useMemo(
+    () => [...roundScores].sort((a, b) => b.totalScore - a.totalScore),
+    [roundScores],
+  );
 
   return (
     <div className="bg-gray-900/90 rounded-xl p-4 max-w-md mx-auto">
@@ -108,3 +112,5 @@ export default function Scoreboard({ roundScores, scores, isGameOver, isHost, on
     </div>
   );
 }
+
+export default memo(Scoreboard);

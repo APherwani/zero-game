@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import type { ClientGameState } from '@/lib/types';
 import type { ClientMessage } from '@/lib/ws-protocol';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
@@ -9,7 +10,7 @@ interface VoiceChatProps {
   send: (msg: ClientMessage) => void;
 }
 
-export default function VoiceChat({ gameState, send }: VoiceChatProps) {
+function VoiceChat({ gameState, send }: VoiceChatProps) {
   const { joined, muted, error, joinVoice, leaveVoice, toggleMute } = useVoiceChat(gameState, send);
 
   const voicePlayers = gameState?.voiceTracks ?? [];
@@ -77,3 +78,5 @@ export default function VoiceChat({ gameState, send }: VoiceChatProps) {
     </div>
   );
 }
+
+export default memo(VoiceChat);

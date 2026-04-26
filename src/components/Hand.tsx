@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import type { Card as CardType, Suit } from '@/lib/types';
 import type { SoundManager } from '@/lib/sounds';
 import { isValidPlay } from '@/lib/game-logic';
@@ -23,28 +23,32 @@ interface DragState {
 
 const SWIPE_THRESHOLD = 50;
 
-export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps) {
+function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps) {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Mirror dragState in a ref so the touchmove listener can read it without
+  // forcing the effect to re-run (and re-attach the listener) every frame.
+  const dragStateRef = useRef<DragState | null>(null);
+  dragStateRef.current = dragState;
 
-  // Non-passive touchmove listener to prevent page scroll during drag
+  // Attach the non-passive touchmove listener once per mount.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (dragState) {
-        e.preventDefault();
-        const touch = e.touches[0];
-        setDragState(prev => prev ? { ...prev, currentY: touch.clientY } : null);
-      }
+      const current = dragStateRef.current;
+      if (!current) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      setDragState({ ...current, currentY: touch.clientY });
     };
 
     container.addEventListener('touchmove', handleTouchMove, { passive: false });
     return () => {
       container.removeEventListener('touchmove', handleTouchMove);
     };
-  }, [dragState]);
+  }, []);
 
   const handleTouchStart = useCallback((card: CardType, e: React.TouchEvent) => {
     if (phase !== 'playing' || !isMyTurn) return;
@@ -114,3 +118,5 @@ export default function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sou
     </div>
   );
 }
+
+export default memo(Hand);

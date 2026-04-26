@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 interface AnimatedNumberProps {
   value: number;
@@ -14,24 +14,31 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-export default function AnimatedNumber({
+function AnimatedNumber({
   value,
   delay = 0,
   duration = 1000,
   prefix = '',
   className,
 }: AnimatedNumberProps) {
-  const [display, setDisplay] = useState(0);
+  // Start at the target value so first paint isn't a flash to 0.
+  const [display, setDisplay] = useState(value);
   const rafRef = useRef<number>(0);
-  const hasAnimated = useRef(false);
+  const fromRef = useRef(value);
+  const isFirstRunRef = useRef(true);
 
   useEffect(() => {
-    if (hasAnimated.current) return;
-    hasAnimated.current = true;
+    // Animate from the last shown value to the new value.
+    const from = fromRef.current;
+    const to = value;
+    if (from === to) return;
+
+    // First mount animates from 0 → value (the count-up effect).
+    const startFrom = isFirstRunRef.current ? 0 : from;
+    isFirstRunRef.current = false;
+    setDisplay(startFrom);
 
     const startTime = performance.now() + delay;
-    const from = 0;
-    const to = value;
 
     function tick(now: number) {
       const elapsed = now - startTime;
@@ -41,9 +48,12 @@ export default function AnimatedNumber({
       }
       const progress = Math.min(elapsed / duration, 1);
       const eased = easeOutCubic(progress);
-      setDisplay(Math.round(from + (to - from) * eased));
+      const current = Math.round(startFrom + (to - startFrom) * eased);
+      setDisplay(current);
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = to;
       }
     }
 
@@ -53,3 +63,5 @@ export default function AnimatedNumber({
 
   return <span className={className}>{prefix}{display}</span>;
 }
+
+export default memo(AnimatedNumber);

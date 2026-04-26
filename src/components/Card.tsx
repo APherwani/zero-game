@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import type { Card as CardType } from '@/lib/types';
 
 const SUIT_SYMBOLS: Record<string, string> = {
@@ -20,7 +21,7 @@ interface CardProps {
   onClick?: () => void;
 }
 
-export default function Card({ card, faceDown, selected, disabled, small, label, labelHighlight, onClick }: CardProps) {
+function Card({ card, faceDown, selected, disabled, small, label, labelHighlight, onClick }: CardProps) {
   const isRed = card.suit === 'hearts' || card.suit === 'diamonds';
   const suitSymbol = SUIT_SYMBOLS[card.suit];
 
@@ -58,7 +59,7 @@ export default function Card({ card, faceDown, selected, disabled, small, label,
           ${small ? 'w-16 h-[5.5rem] text-sm p-1' : 'w-20 h-28 text-base p-1.5'}
           rounded-lg bg-white border-2 shadow-md
           flex flex-col items-center justify-between
-          transition-all duration-150 select-none
+          transition-[transform,box-shadow,opacity] duration-150 select-none
           ${isRed ? 'text-red-600' : 'text-gray-900'}
           ${selected ? 'border-yellow-400 -translate-y-3 shadow-lg shadow-yellow-400/30' : 'border-gray-300'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-1 hover:shadow-lg active:scale-95'}
@@ -71,3 +72,5 @@ export default function Card({ card, faceDown, selected, disabled, small, label,
     </div>
   );
 }
+
+export default memo(Card);
