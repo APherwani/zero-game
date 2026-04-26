@@ -69,7 +69,7 @@ export default function GamePage() {
 
   if (!gameState) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex items-center justify-center">
+      <div className="h-dvh bg-gradient-to-b from-green-900 to-green-950 flex items-center justify-center">
         <div className="text-white text-lg">
           {connected ? 'Loading game...' : 'Connecting...'}
         </div>
@@ -85,7 +85,7 @@ export default function GamePage() {
   const isHostScorekeeper = gameState.mode === 'inPerson' && gameState.playerId === gameState.hostId && !me;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col">
+    <div className="h-dvh overflow-hidden bg-gradient-to-b from-green-900 to-green-950 flex flex-col">
       {/* Header */}
       <GameHeader gameState={gameState} muted={muted} onToggleMute={toggleMute} />
 
@@ -123,8 +123,11 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* Center area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4">
+      {/* Center area — flex-1 + min-h-0 lets it absorb leftover height; the
+          internal overflow-y-auto keeps the panel from pushing the hand off
+          the screen if its content (e.g. an expanded scoreboard or trick
+          pile) is taller than the available space. */}
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center px-4">
         {gameState.phase === 'bidding' && (
           <BiddingPanel gameState={gameState} onPlaceBid={placeBid} sound={sound} />
         )}
