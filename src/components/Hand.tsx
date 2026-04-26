@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { Card as CardType, Suit } from '@/lib/types';
 import type { SoundManager } from '@/lib/sounds';
 import { isValidPlay } from '@/lib/game-logic';
@@ -17,6 +17,7 @@ interface HandProps {
 
 interface DragState {
   cardId: string;
+  startX: number;
   startY: number;
   currentY: number;
 }
@@ -41,13 +42,41 @@ function computeCardOffset(n: number): number {
 
 function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps) {
   const [dragState, setDragState] = useState<DragState | null>(null);
+  // When a hand contains unplayable cards (must-follow-suit but you also
+  // have other cards), hide them by default. Toggling reveals every card
+  // in a horizontally scrollable single row so each is fully visible.
+  const [showAll, setShowAll] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Mirror dragState in a ref so the touchmove listener can read it without
-  // forcing the effect to re-run (and re-attach the listener) every frame.
   const dragStateRef = useRef<DragState | null>(null);
   dragStateRef.current = dragState;
 
-  // Attach the non-passive touchmove listener once per mount.
+  // Categorize cards. A card is unplayable when phase is 'playing', it's
+  // your turn, there's a lead suit you can follow, and this card is off-suit.
+  const { playableCards, unplayableCount } = useMemo(() => {
+    const playableOnly: CardType[] = [];
+    let unplayable = 0;
+    for (const c of cards) {
+      if (isValidPlay(c, cards, leadSuit)) {
+        playableOnly.push(c);
+      } else {
+        unplayable++;
+      }
+    }
+    return { playableCards: playableOnly, unplayableCount: unplayable };
+  }, [cards, leadSuit]);
+
+  const hasUnplayable = phase === 'playing' && isMyTurn && unplayableCount > 0;
+  const inScrollMode = hasUnplayable && showAll;
+  const visibleCards = (hasUnplayable && !showAll) ? playableCards : cards;
+
+  // Reset to "playable only" when the lead suit changes (new trick) so the
+  // user doesn't have to toggle every trick.
+  useEffect(() => {
+    setShowAll(false);
+  }, [leadSuit]);
+
+  // Non-passive touchmove listener, attached once per mount. Reads
+  // dragState via a ref so the listener doesn't have to re-bind.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -55,8 +84,16 @@ function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps
     const handleTouchMove = (e: TouchEvent) => {
       const current = dragStateRef.current;
       if (!current) return;
-      e.preventDefault();
       const touch = e.touches[0];
+      const dx = Math.abs(touch.clientX - current.startX);
+      const dy = current.startY - touch.clientY;
+      // If the user is panning horizontally (e.g. scrolling the hand in
+      // show-all mode), abandon the drag and let the browser scroll.
+      if (dx > Math.abs(dy) && dx > 10) {
+        setDragState(null);
+        return;
+      }
+      e.preventDefault();
       setDragState({ ...current, currentY: touch.clientY });
     };
 
@@ -71,7 +108,12 @@ function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps
     if (!isValidPlay(card, cards, leadSuit)) return;
 
     const touch = e.touches[0];
-    setDragState({ cardId: card.id, startY: touch.clientY, currentY: touch.clientY });
+    setDragState({
+      cardId: card.id,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      currentY: touch.clientY,
+    });
   }, [phase, isMyTurn, cards, leadSuit]);
 
   const handleTouchEnd = useCallback((card: CardType) => {
@@ -83,7 +125,7 @@ function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps
       onPlayCard(card.id);
     }
     setDragState(null);
-  }, [dragState, onPlayCard]);
+  }, [dragState, onPlayCard, sound]);
 
   const handleClick = useCallback((card: CardType) => {
     if (phase !== 'playing' || !isMyTurn) return;
@@ -94,50 +136,76 @@ function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps
 
   if ((phase !== 'playing' && phase !== 'bidding') || cards.length === 0) return null;
 
-  const offset = computeCardOffset(cards.length);
+  const offset = computeCardOffset(visibleCards.length);
+
+  const renderCard = (card: CardType, idx: number, opts: { offsetPx: number | null }) => {
+    const playable = isValidPlay(card, cards, leadSuit);
+    const isDragging = dragState?.cardId === card.id;
+    const dragDistance = isDragging ? dragState.startY - dragState.currentY : 0;
+    const pastThreshold = dragDistance > SWIPE_THRESHOLD;
+
+    return (
+      <div
+        key={card.id}
+        className="touch-none relative shrink-0"
+        style={{
+          marginLeft: opts.offsetPx === null || idx === 0 ? 0 : `${opts.offsetPx}px`,
+          transform: isDragging ? `translateY(${-Math.max(0, dragDistance)}px)` : undefined,
+          transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+          zIndex: isDragging ? 50 : idx,
+        }}
+        onTouchStart={(e) => handleTouchStart(card, e)}
+        onTouchEnd={() => handleTouchEnd(card)}
+        onTouchCancel={() => setDragState(null)}
+      >
+        <div
+          className={`transition-shadow duration-150 rounded-lg ${
+            pastThreshold ? 'shadow-lg shadow-yellow-400/50 ring-2 ring-yellow-400' : ''
+          }`}
+          style={{
+            opacity: isDragging ? Math.max(0.6, 1 - dragDistance / 200) : 1,
+          }}
+        >
+          <Card
+            card={card}
+            disabled={phase === 'bidding' ? false : !playable}
+            onClick={() => handleClick(card)}
+          />
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div ref={containerRef} className="flex justify-center items-end px-2 pb-2">
-      {cards.map((card, idx) => {
-        const playable = phase === 'playing' && isMyTurn && isValidPlay(card, cards, leadSuit);
-        const isDragging = dragState?.cardId === card.id;
-        const dragDistance = isDragging ? dragState.startY - dragState.currentY : 0;
-        const pastThreshold = dragDistance > SWIPE_THRESHOLD;
-
-        return (
-          <div
-            key={card.id}
-            className="touch-none relative"
-            style={{
-              marginLeft: idx === 0 ? 0 : `${offset}px`,
-              transform: isDragging ? `translateY(${-Math.max(0, dragDistance)}px)` : undefined,
-              transition: isDragging ? 'none' : 'transform 0.2s ease-out',
-              // Lift the dragged card above its neighbors so the swipe
-              // gesture and yellow glow aren't clipped by the next card.
-              zIndex: isDragging ? 50 : idx,
-            }}
-            onTouchStart={(e) => handleTouchStart(card, e)}
-            onTouchEnd={() => handleTouchEnd(card)}
-            onTouchCancel={() => setDragState(null)}
+    <>
+      {hasUnplayable && (
+        <div className="flex justify-center pb-1">
+          <button
+            onClick={() => setShowAll(s => !s)}
+            className="text-[11px] text-white/60 hover:text-white/90 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1 transition-colors"
           >
-            <div
-              className={`transition-shadow duration-150 rounded-lg ${
-                pastThreshold ? 'shadow-lg shadow-yellow-400/50 ring-2 ring-yellow-400' : ''
-              }`}
-              style={{
-                opacity: isDragging ? Math.max(0.6, 1 - dragDistance / 200) : 1,
-              }}
-            >
-              <Card
-                card={card}
-                disabled={phase === 'bidding' ? false : !playable}
-                onClick={() => handleClick(card)}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
+            {showAll
+              ? `Hide ${unplayableCount} unplayable`
+              : `Show all ${cards.length} cards`}
+          </button>
+        </div>
+      )}
+
+      {inScrollMode ? (
+        // Full hand, no overlap, horizontally scrollable. Lets the user
+        // see every card edge-to-edge even though most are dimmed.
+        <div
+          ref={containerRef}
+          className="flex items-end gap-1 px-3 pb-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {cards.map((card, idx) => renderCard(card, idx, { offsetPx: null }))}
+        </div>
+      ) : (
+        <div ref={containerRef} className="flex justify-center items-end px-2 pb-2">
+          {visibleCards.map((card, idx) => renderCard(card, idx, { offsetPx: offset }))}
+        </div>
+      )}
+    </>
   );
 }
 
