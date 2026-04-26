@@ -22,6 +22,22 @@ interface DragState {
 }
 
 const SWIPE_THRESHOLD = 50;
+// Card layout. Cards are w-20 = 80px wide. We assume ~340px usable on the
+// narrowest mobile viewport. Beyond what fits, cards overlap (fan-style)
+// so the hand stays a single row instead of wrapping into 3-4 rows that
+// shove the rest of the UI off-screen.
+const CARD_WIDTH = 80;
+const HAND_AVAILABLE = 340;
+const NATURAL_GAP = 4;
+const MAX_OVERLAP = 50;
+
+function computeCardOffset(n: number): number {
+  if (n <= 1) return 0;
+  const required = n * CARD_WIDTH + (n - 1) * NATURAL_GAP;
+  if (required <= HAND_AVAILABLE) return NATURAL_GAP;
+  const need = (n * CARD_WIDTH - HAND_AVAILABLE) / (n - 1);
+  return -Math.min(MAX_OVERLAP, Math.ceil(need));
+}
 
 function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps) {
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -78,9 +94,11 @@ function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps
 
   if ((phase !== 'playing' && phase !== 'bidding') || cards.length === 0) return null;
 
+  const offset = computeCardOffset(cards.length);
+
   return (
-    <div ref={containerRef} className="flex justify-center items-end gap-1 flex-wrap px-2 pb-2">
-      {cards.map((card) => {
+    <div ref={containerRef} className="flex justify-center items-end px-2 pb-2">
+      {cards.map((card, idx) => {
         const playable = phase === 'playing' && isMyTurn && isValidPlay(card, cards, leadSuit);
         const isDragging = dragState?.cardId === card.id;
         const dragDistance = isDragging ? dragState.startY - dragState.currentY : 0;
@@ -89,10 +107,14 @@ function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps
         return (
           <div
             key={card.id}
-            className="touch-none"
+            className="touch-none relative"
             style={{
+              marginLeft: idx === 0 ? 0 : `${offset}px`,
               transform: isDragging ? `translateY(${-Math.max(0, dragDistance)}px)` : undefined,
               transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+              // Lift the dragged card above its neighbors so the swipe
+              // gesture and yellow glow aren't clipped by the next card.
+              zIndex: isDragging ? 50 : idx,
             }}
             onTouchStart={(e) => handleTouchStart(card, e)}
             onTouchEnd={() => handleTouchEnd(card)}

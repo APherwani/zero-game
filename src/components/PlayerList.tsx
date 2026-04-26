@@ -23,14 +23,16 @@ function PlayerList({ players, myIndex, phase }: PlayerListProps) {
   );
 
   return (
-    <div className="flex flex-wrap justify-center gap-2 px-2">
+    // Horizontal scroll keeps the row at a single line regardless of
+    // player count, instead of wrapping into 2-3 rows that crowd out the
+    // playing surface on phones.
+    <div className="flex gap-2 px-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {reordered.map((p) => (
         <div
           key={p.id}
           className={`
-            px-3 py-2 rounded-lg text-xs font-medium
+            shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-medium
             flex flex-col items-center gap-0.5
-            transition-all
             ${p.isCurrentTurn ? 'bg-yellow-500/30 ring-2 ring-yellow-400' : 'bg-gray-800/60'}
             ${!p.isBot && !p.connected ? 'opacity-40' : ''}
           `}
