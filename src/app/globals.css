@@ -46,3 +46,47 @@ body {
 .animate-score-miss {
   animation: score-flash-red 1.2s ease-out forwards;
 }
+
+/* A card slides up + fades in when it's added to the trick area, so
+   bots' plays don't just teleport into existence — you can see the
+   card arrive even if you missed the WS update. */
+@keyframes card-deal {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-card-deal {
+  animation: card-deal 220ms ease-out;
+}
+
+/* Round-end: a player's roundScore floats up over their chip. Lets
+   players viscerally feel "I hit my bid" before the scoreboard slides
+   in. Green for hit, red for miss. */
+@keyframes score-float {
+  0%   { opacity: 0; transform: translate(-50%, 0) scale(0.7); }
+  20%  { opacity: 1; transform: translate(-50%, -8px) scale(1); }
+  80%  { opacity: 1; transform: translate(-50%, -32px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -44px) scale(1); }
+}
+
+.animate-score-float {
+  animation: score-float 1.6s ease-out forwards;
+}
+
+/* Trick winner's chip pulses with a yellow halo for a moment so even
+   distracted players catch who took the trick. */
+@keyframes winner-chip-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+  30%  { box-shadow: 0 0 0 6px rgba(250, 204, 21, 0.55); }
+  100% { box-shadow: 0 0 0 14px rgba(250, 204, 21, 0); }
+}
+
+.animate-winner-pulse {
+  animation: winner-chip-pulse 800ms ease-out;
+}

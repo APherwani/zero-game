@@ -40,7 +40,11 @@ function TrickArea({ currentTrick, players, trickWinner }: TrickAreaProps) {
             const player = players.find((p) => p.id === tc.playerId);
             const isWinner = tc.playerId === trickWinner;
             return (
-              <div key={tc.playerId} className="flex flex-col items-center">
+              // animate-card-deal runs once per mount — when a player adds
+              // their card to the trick. The trick reset between hands
+              // unmounts everything, so the next trick's first card also
+              // animates in cleanly.
+              <div key={tc.playerId} className="flex flex-col items-center animate-card-deal">
                 <span
                   className={`text-[10px] font-medium leading-none mb-1 truncate max-w-[64px] ${
                     isWinner ? 'text-yellow-400' : 'text-white/60'
