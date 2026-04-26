@@ -13,6 +13,41 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 1000;
 let currentRoomCode: string | null = null;
 
+// Outbound message queue. Mobile WebSockets disconnect routinely (tab
+// backgrounded, network blip, screen off) — without a queue, taps made
+// during the gap are silently dropped. We hold messages here and flush
+// them once the server has acknowledged the session.
+const SESSION_ESTABLISHING: ReadonlySet<ClientMessage['type']> = new Set([
+  'create-room',
+  'join-room',
+  'rejoin-room',
+]);
+const MAX_QUEUE = 20;
+let messageQueue: ClientMessage[] = [];
+let sessionReady = false;
+
+function flushQueue() {
+  if (!globalWs || globalWs.readyState !== WebSocket.OPEN) return;
+  const pending = messageQueue;
+  messageQueue = [];
+  for (const msg of pending) {
+    try {
+      globalWs.send(JSON.stringify(msg));
+    } catch {
+      // If a send fails partway through, requeue what's left so the next
+      // reconnect attempt can deliver it.
+      messageQueue.push(msg);
+    }
+  }
+}
+
+function enqueue(msg: ClientMessage) {
+  if (messageQueue.length >= MAX_QUEUE) {
+    messageQueue.shift();
+  }
+  messageQueue.push(msg);
+}
+
 function notifyConnectionListeners() {
   for (const listener of globalConnectionListeners) listener();
 }
@@ -23,6 +58,7 @@ function connectToRoom(roomCode: string) {
     globalWs.close(1000, 'Switching rooms');
     globalWs = null;
     globalConnected = false;
+    sessionReady = false;
   }
   if (globalWs && globalWs.readyState === WebSocket.CONNECTING) return;
 
@@ -31,16 +67,22 @@ function connectToRoom(roomCode: string) {
   const ws = new WebSocket(`${protocol}//${window.location.host}/ws/room/${roomCode}`);
 
   ws.onopen = () => {
+    // Only honor onopen if this is still the active socket.
+    if (globalWs !== ws) return;
     globalConnected = true;
     reconnectDelay = 1000;
     notifyConnectionListeners();
   };
 
   ws.onclose = () => {
+    // A late onclose from a previously replaced socket must not clobber
+    // the current globalWs/globalConnected. Only act if this *is* the
+    // current socket.
+    if (globalWs !== ws) return;
     globalConnected = false;
     globalWs = null;
+    sessionReady = false;
     notifyConnectionListeners();
-    // Auto-reconnect with exponential backoff
     if (currentRoomCode) {
       reconnectTimer = setTimeout(() => {
         if (currentRoomCode) connectToRoom(currentRoomCode);
@@ -56,6 +98,12 @@ function connectToRoom(roomCode: string) {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data) as ServerMessage;
+      // The server has accepted us into the room; safe to flush queued
+      // gameplay messages now that the socket→player mapping exists.
+      if (msg.type === 'room-created' || msg.type === 'room-joined') {
+        sessionReady = true;
+        flushQueue();
+      }
       for (const listener of globalListeners) {
         listener(msg);
       }
@@ -86,9 +134,22 @@ export function useWebSocket(roomCode?: string) {
   }, [roomCode]);
 
   const send = useCallback((msg: ClientMessage) => {
-    if (globalWs?.readyState === WebSocket.OPEN) {
-      globalWs.send(JSON.stringify(msg));
+    const isSessionMsg = SESSION_ESTABLISHING.has(msg.type);
+    const open = globalWs?.readyState === WebSocket.OPEN;
+
+    // Session-establishing messages always pass through when the socket is
+    // open. Gameplay messages also pass through once the server has
+    // acknowledged the session. Anything else gets queued for after the
+    // next room-joined / room-created.
+    if (open && (isSessionMsg || sessionReady)) {
+      try {
+        globalWs!.send(JSON.stringify(msg));
+        return;
+      } catch {
+        // Fall through to queue if the underlying send fails.
+      }
     }
+    enqueue(msg);
   }, []);
 
   const subscribe = useCallback((fn: MessageHandler) => {
@@ -120,6 +181,8 @@ export function useWebSocket(roomCode?: string) {
       globalWs = null;
     }
     globalConnected = false;
+    sessionReady = false;
+    messageQueue = [];
     notifyConnectionListeners();
   }, []);
 

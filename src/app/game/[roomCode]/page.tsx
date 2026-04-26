@@ -49,6 +49,17 @@ export default function GamePage() {
     }
   }, [gameState, connected, roomCode, router]);
 
+  // If the server tells us the room is gone (eviction / cleanup), drop our
+  // stored session and bounce home rather than letting the user sit on a
+  // dead game.
+  useEffect(() => {
+    if (error && /expired|doesn’t exist|Player not found/i.test(error)) {
+      localStorage.removeItem('zero-game-room');
+      localStorage.removeItem('zero-game-player');
+      router.push('/');
+    }
+  }, [error, router]);
+
   const handleLeave = useCallback(() => {
     localStorage.removeItem('zero-game-room');
     localStorage.removeItem('zero-game-player');
@@ -77,6 +88,12 @@ export default function GamePage() {
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col">
       {/* Header */}
       <GameHeader gameState={gameState} muted={muted} onToggleMute={toggleMute} />
+
+      {!connected && (
+        <div className="mx-4 mt-2 bg-yellow-900/70 text-yellow-200 px-4 py-1.5 rounded-lg text-xs text-center font-medium">
+          Reconnecting…
+        </div>
+      )}
 
       {/* Error toast */}
       {error && (

@@ -35,6 +35,72 @@ export class GameRoomDO extends DurableObject<Env> {
   private chatMessages: ChatMessage[] = [];
   private gameStartedAt: string | null = null;
   private roomCode: string | null = null;
+  private persistScheduled = false;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    // Rehydrate persisted state on cold start. Without this, a DO eviction
+    // (idle, deploy, etc.) would lose the room and any subsequent join
+    // would fail with "Room not found" even though the code was real.
+    ctx.blockConcurrencyWhile(async () => {
+      const stored = await ctx.storage.get<GameState>('state');
+      if (!stored) return;
+      this.state = stored;
+      this.initialized = true;
+      this.roomCode = stored.roomId;
+
+      // Live socket-connection state is by definition gone on cold start.
+      // Mark all human players as disconnected; each one will flip back to
+      // connected=true the moment they rejoin.
+      for (const p of this.state.players) {
+        if (!p.isBot) p.connected = false;
+      }
+
+      const pending = await ctx.storage.get<typeof this.pendingTrickResult>('pendingTrickResult');
+      if (pending) this.pendingTrickResult = pending;
+
+      const chat = await ctx.storage.get<ChatMessage[]>('chatMessages');
+      if (chat) this.chatMessages = chat;
+
+      const startedAt = await ctx.storage.get<string>('gameStartedAt');
+      if (startedAt) this.gameStartedAt = startedAt;
+
+      // If the DO was evicted mid trick-reveal, resume the resolve timer so
+      // the trick doesn't sit frozen on rehydrated clients.
+      if (this.pendingTrickResult && this.state?.trickWinner) {
+        this.trickResolveTimer = setTimeout(() => {
+          this.trickResolveTimer = null;
+          this.resolveTrick();
+          this.broadcastGameState();
+          this.scheduleBotTurn();
+        }, TRICK_REVEAL_MS);
+      }
+    });
+  }
+
+  // Persist room state. Coalesces multiple calls per tick so a single
+  // handler doing several mutations + a broadcast only writes once.
+  private persist(): void {
+    if (!this.initialized) return;
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => {
+      this.persistScheduled = false;
+      try {
+        this.ctx.storage.put('state', this.state);
+        this.ctx.storage.put('pendingTrickResult', this.pendingTrickResult);
+        if (this.gameStartedAt) {
+          this.ctx.storage.put('gameStartedAt', this.gameStartedAt);
+        }
+      } catch { /* storage write failures are non-fatal */ }
+    });
+  }
+
+  private persistChat(): void {
+    try {
+      this.ctx.storage.put('chatMessages', this.chatMessages);
+    } catch { /* non-fatal */ }
+  }
 
   // ── WebSocket lifecycle ────────────────────────────────────────────
 
@@ -107,6 +173,10 @@ export class GameRoomDO extends DurableObject<Env> {
         try { ws.close(1000, 'Room expired'); } catch { /* ignore */ }
       }
       this.connections.clear();
+      // Wipe persisted state so the room code stops resolving — without
+      // this, abandoned rooms would live forever in DO storage.
+      try { await this.ctx.storage.deleteAll(); } catch { /* ignore */ }
+      this.initialized = false;
     }
   }
 
@@ -144,7 +214,7 @@ export class GameRoomDO extends DurableObject<Env> {
     }
 
     if (!this.initialized) {
-      this.sendError(ws, 'Room not found');
+      this.sendError(ws, 'This room has expired or doesn’t exist. Ask for a new code.');
       return;
     }
 
@@ -192,7 +262,7 @@ export class GameRoomDO extends DurableObject<Env> {
 
   private handleRejoinRoom(ws: WebSocket, payload: { roomCode: string; playerId: string }): void {
     if (!this.initialized) {
-      this.sendError(ws, 'Room not found');
+      this.sendError(ws, 'This room has expired. Returning to the home screen.');
       return;
     }
 
@@ -627,6 +697,7 @@ export class GameRoomDO extends DurableObject<Env> {
 
     this.chatMessages.push(chatMsg);
     if (this.chatMessages.length > 100) this.chatMessages.shift();
+    this.persistChat();
 
     // Broadcast to all
     const msg: ServerMessage = { type: 'chat-message', payload: chatMsg };
@@ -1145,6 +1216,7 @@ export class GameRoomDO extends DurableObject<Env> {
   // ── Broadcasting ───────────────────────────────────────────────────
 
   private broadcastGameState(): void {
+    this.persist();
     for (const [playerId, ws] of this.connections) {
       try {
         const clientState = this.getClientState(playerId);

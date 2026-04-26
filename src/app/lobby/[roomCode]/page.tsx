@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import VoiceChat from '@/components/VoiceChat';
+const ROOM_GONE_RE = /expired|doesn’t exist|Player not found/i;
 
 export default function LobbyPage() {
   const params = useParams();
@@ -31,6 +32,15 @@ export default function LobbyPage() {
       router.push(`/game/${roomCode}`);
     }
   }, [gameState, roomCode, router]);
+
+  // If the server tells us the room is gone, clear our session and go home.
+  useEffect(() => {
+    if (error && ROOM_GONE_RE.test(error)) {
+      localStorage.removeItem('zero-game-room');
+      localStorage.removeItem('zero-game-player');
+      router.push('/');
+    }
+  }, [error, router]);
 
   const isInPerson = gameState?.mode === 'inPerson';
   const isSpectator = gameState?.isSpectator ?? false;
