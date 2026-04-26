@@ -9,6 +9,16 @@ import type { ServerMessage } from '@/lib/ws-protocol';
 import type { GameMode } from '@/lib/types';
 
 const ROOM_CODE_LENGTH = 4;
+// Mirrors the server's character set in scripts/create-entry.mjs (no I or O).
+const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+function generateRoomCode(): string {
+  let code = '';
+  for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
+    code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
+  }
+  return code;
+}
 
 function HomeContent() {
   const router = useRouter();
@@ -31,6 +41,10 @@ function HomeContent() {
 
   // Track pending action to execute once WebSocket connects
   const [pendingAction, setPendingAction] = useState<{ type: 'create' | 'join'; name: string; roomCode?: string; mode?: GameMode } | null>(null);
+  // Lock the Create / Join buttons while a request is in flight so a second
+  // tap doesn't regenerate pendingRoomCode (which would close the in-flight
+  // WebSocket and abort the create that was about to succeed).
+  const [busy, setBusy] = useState(false);
 
   // Listen for room-created and room-joined events
   useEffect(() => {
@@ -60,32 +74,36 @@ function HomeContent() {
     }
   }, [connected, pendingAction, createRoom, joinRoom]);
 
-  const handleCreate = useCallback(async () => {
+  // Re-enable the buttons if the server reports an error (e.g. name empty,
+  // room code already in use). Without this the user is stuck staring at
+  // a "Creating room…" button forever.
+  useEffect(() => {
+    if (error) setBusy(false);
+  }, [error]);
+
+  const handleCreate = useCallback(() => {
     // In-person mode doesn't require a name (host is a scorekeeper, not a player).
     if (gameMode === 'digital' && !name.trim()) return;
-    try {
-      const res = await fetch('/api/rooms', { method: 'POST' });
-      const data = await res.json();
-      const code = data.roomCode as string;
-      setPendingAction({ type: 'create', name: name.trim(), mode: gameMode });
-      setPendingRoomCode(code);
-    } catch (err) {
-      // If REST call fails, generate code client-side as fallback
-      console.warn('[zero-game] /api/rooms failed, using client-side room code generation:', err);
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-      let code = '';
-      for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
-      setPendingAction({ type: 'create', name: name.trim(), mode: gameMode });
-      setPendingRoomCode(code);
-    }
-  }, [name, gameMode]);
+    if (busy) return;
+    setBusy(true);
+    // Generate the code on-device. The previous flow round-tripped to
+    // /api/rooms purely to get a random code, which added 100–300ms of
+    // dead time before we even opened the WebSocket. Server-side
+    // uniqueness is enforced by handleCreateRoom rejecting an
+    // already-initialised DO.
+    const code = generateRoomCode();
+    setPendingAction({ type: 'create', name: name.trim(), mode: gameMode });
+    setPendingRoomCode(code);
+  }, [name, gameMode, busy]);
 
   const handleJoin = useCallback(() => {
     if (!name.trim() || !roomCode.trim()) return;
+    if (busy) return;
+    setBusy(true);
     const code = roomCode.trim().toUpperCase();
     setPendingAction({ type: 'join', name: name.trim(), roomCode: code });
     setPendingRoomCode(code);
-  }, [name, roomCode]);
+  }, [name, roomCode, busy]);
 
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-green-900 to-green-950 flex flex-col items-center justify-center px-4">
@@ -172,10 +190,10 @@ function HomeContent() {
           </p>
           <button
             onClick={handleCreate}
-            disabled={gameMode === 'digital' && !name.trim()}
+            disabled={busy || (gameMode === 'digital' && !name.trim())}
             className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create Room
+            {busy ? 'Creating room…' : 'Create Room'}
           </button>
           <button
             onClick={() => setMode('menu')}
@@ -208,10 +226,10 @@ function HomeContent() {
           />
           <button
             onClick={handleJoin}
-            disabled={!name.trim() || roomCode.length < ROOM_CODE_LENGTH}
+            disabled={busy || !name.trim() || roomCode.length < ROOM_CODE_LENGTH}
             className="py-4 px-8 bg-yellow-500 text-black font-bold text-lg rounded-xl hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Join Room
+            {busy ? 'Joining room…' : 'Join Room'}
           </button>
           <button
             onClick={() => setMode('menu')}
