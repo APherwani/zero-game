@@ -147,7 +147,14 @@ function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps
     return (
       <div
         key={card.id}
-        className="touch-none relative shrink-0"
+        // touch-pan-x lets the browser handle horizontal scrolling of the
+        // hand container while our JS still claims vertical movement (via
+        // preventDefault in handleTouchMove) for the swipe-up-to-play
+        // gesture. With the previous touch-none, the parent's
+        // overflow-x-auto scroll was unreachable once a finger landed on
+        // a card — leading to the "scroll one way and can't come back"
+        // bug in show-all mode.
+        className="touch-pan-x relative shrink-0"
         style={{
           marginLeft: opts.offsetPx === null || idx === 0 ? 0 : `${opts.offsetPx}px`,
           transform: isDragging ? `translateY(${-Math.max(0, dragDistance)}px)` : undefined,
@@ -168,7 +175,12 @@ function Hand({ cards, isMyTurn, leadSuit, onPlayCard, phase, sound }: HandProps
         >
           <Card
             card={card}
-            disabled={phase === 'bidding' ? false : !playable}
+            // Only dim cards when it's actively the player's turn AND the
+            // card can't be legally played. Outside of that window the
+            // dim conveys nothing — it just makes the hand look like a
+            // patchwork of half-opacity cards while you wait for someone
+            // else to act.
+            disabled={phase === 'playing' && isMyTurn && !playable}
             onClick={() => handleClick(card)}
           />
         </div>
