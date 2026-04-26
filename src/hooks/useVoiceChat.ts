@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { ClientGameState, VoiceTrack } from '@/lib/types';
 import type { ClientMessage } from '@/lib/ws-protocol';
 
@@ -160,14 +160,31 @@ export function useVoiceChat(gameState: ClientGameState | null, send: SendFn) {
 
   // ── React to voiceTracks changes (new players joining voice) ──────
 
+  // Server broadcasts produce a fresh `voiceTracks` array reference on every
+  // event. Depending on the array directly would re-run this effect after
+  // every bid / play / chat. Compute a stable string digest so the effect
+  // only fires when the *set* of subscribable tracks actually changes.
+  const remoteTrackDigest = useMemo(() => {
+    const myId = gameState?.playerId;
+    return (gameState?.voiceTracks ?? [])
+      .filter(t => t.playerId !== myId)
+      .map(t => `${t.playerId}:${t.sessionId}:${t.trackName}`)
+      .sort()
+      .join('|');
+  }, [gameState?.voiceTracks, gameState?.playerId]);
+
   useEffect(() => {
     if (!joined || !pcRef.current || !sessionIdRef.current) return;
+    if (!remoteTrackDigest) return;
     const remoteTracks = (gameState?.voiceTracks ?? []).filter(
       t => t.playerId !== gameState?.playerId
     );
     if (!remoteTracks.length) return;
     subscribeToTracks(pcRef.current, sessionIdRef.current, remoteTracks);
-  }, [joined, gameState?.voiceTracks, gameState?.playerId, subscribeToTracks]);
+    // gameState refs are intentionally read inside; the effect is keyed on
+    // remoteTrackDigest so we don't re-run on every server broadcast.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joined, remoteTrackDigest, subscribeToTracks]);
 
   // ── Leave voice ───────────────────────────────────────────────────
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import type { TrickCard, ClientPlayer } from '@/lib/types';
 import Card from './Card';
 
@@ -40,24 +41,28 @@ function getContainerSize(playerCount: number): { w: number; h: number } {
   return { w: 378, h: 248 }; // 10 players
 }
 
-export default function TrickArea({ currentTrick, players, myIndex, trickWinner }: TrickAreaProps) {
+function TrickArea({ currentTrick, players, myIndex, trickWinner }: TrickAreaProps) {
   const n = players.length;
-  const { rx, ry } = getRadii(n);
   const { w, h } = getContainerSize(n);
 
-  const getStyle = (playerIndex: number): React.CSSProperties => {
-    const relativePos = (playerIndex - myIndex + n) % n;
-    // 0 = bottom (me), going clockwise. Offset by -π/2 so 0 is at bottom.
-    const angle = (relativePos / n) * 2 * Math.PI - Math.PI / 2;
-    const x = Math.cos(angle) * rx;
-    const y = Math.sin(angle) * ry;
-    return {
-      position: 'absolute' as const,
-      left: `calc(50% + ${x}px)`,
-      top: `calc(50% + ${y}px)`,
-      transform: 'translate(-50%, -50%)',
-    };
-  };
+  // Pre-compute the seat positions once per (n, myIndex) — geometry doesn't
+  // change as cards are played, so there's no reason to recompute on every
+  // re-render or per-card.
+  const positions = useMemo(() => {
+    const { rx, ry } = getRadii(n);
+    const out: { left: string; top: string }[] = [];
+    for (let i = 0; i < n; i++) {
+      const relativePos = (i - myIndex + n) % n;
+      const angle = (relativePos / n) * 2 * Math.PI - Math.PI / 2;
+      const x = Math.cos(angle) * rx;
+      const y = Math.sin(angle) * ry;
+      out.push({
+        left: `calc(50% + ${x}px)`,
+        top: `calc(50% + ${y}px)`,
+      });
+    }
+    return out;
+  }, [n, myIndex]);
 
   return (
     <div className="relative mx-auto" style={{ width: w, height: h, maxWidth: '100vw' }}>
@@ -73,13 +78,17 @@ export default function TrickArea({ currentTrick, players, myIndex, trickWinner 
         if (playerIndex === -1) return null;
         const player = players[playerIndex];
         const isWinner = tc.playerId === trickWinner;
-        const style = getStyle(playerIndex);
-        // Each successive card gets a higher z-index so labels aren't covered
-        style.zIndex = i + 1;
+        const pos = positions[playerIndex];
         return (
           <div
             key={tc.playerId}
-            style={style}
+            style={{
+              position: 'absolute',
+              left: pos.left,
+              top: pos.top,
+              transform: 'translate(-50%, -50%)',
+              zIndex: i + 1,
+            }}
             className="flex flex-col items-center"
           >
             <div className={isWinner ? 'ring-2 ring-yellow-400 rounded-lg' : ''}>
@@ -102,3 +111,5 @@ export default function TrickArea({ currentTrick, players, myIndex, trickWinner 
     </div>
   );
 }
+
+export default memo(TrickArea);

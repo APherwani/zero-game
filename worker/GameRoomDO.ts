@@ -12,6 +12,10 @@ import {
 } from '../src/lib/game-logic';
 import { decideBid, decideCard, getNextBotName } from '../src/server/BotBrain';
 
+// Trick reveal pause (ms). Long enough for players to register the winner,
+// short enough that the game doesn't feel sluggish between tricks.
+const TRICK_REVEAL_MS = 1500;
+
 export class GameRoomDO extends DurableObject<Env> {
   private state!: GameState;
   private initialized = false;
@@ -387,14 +391,14 @@ export class GameRoomDO extends DurableObject<Env> {
     const result = this.playCard(playerId, payload.cardId);
     if (result === 'trick-complete') {
       this.broadcastGameState();
-      // After 2.5s reveal delay, resolve the trick
+      // After the reveal delay, resolve the trick.
       if (this.trickResolveTimer !== null) clearTimeout(this.trickResolveTimer);
       this.trickResolveTimer = setTimeout(() => {
         this.trickResolveTimer = null;
         this.resolveTrick();
         this.broadcastGameState();
         this.scheduleBotTurn();
-      }, 2500);
+      }, TRICK_REVEAL_MS);
     } else if (result) {
       this.broadcastGameState();
       this.scheduleBotTurn();
@@ -1029,7 +1033,7 @@ export class GameRoomDO extends DurableObject<Env> {
             this.resolveTrick();
             this.broadcastGameState();
             this.scheduleBotTurn();
-          }, 2500);
+          }, TRICK_REVEAL_MS);
         } else {
           this.broadcastGameState();
           this.scheduleBotTurn();
@@ -1112,7 +1116,7 @@ export class GameRoomDO extends DurableObject<Env> {
               this.resolveTrick();
               this.broadcastGameState();
               this.scheduleBotTurn();
-            }, 2500);
+            }, TRICK_REVEAL_MS);
           } else if (result) {
             this.broadcastGameState();
             this.scheduleBotTurn();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { ClientGameState } from '@/lib/types';
 import type { SoundManager } from '@/lib/sounds';
 import { getBlockedBid } from '@/lib/game-logic';
@@ -11,7 +11,7 @@ interface BiddingPanelProps {
   sound?: SoundManager;
 }
 
-export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPanelProps) {
+function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPanelProps) {
   const [selectedBid, setSelectedBid] = useState<number | null>(null);
   // In-person host can tap a placed-bid chip to edit it (misclick fix).
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
@@ -20,32 +20,47 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
   const isHost = gameState.playerId === gameState.hostId;
   const isSpectator = gameState.isSpectator;
 
-  // The player being bid for — either the edit target (in-person) or the
-  // current-turn player (default).
-  const currentPlayer = gameState.players[gameState.currentTurnIndex];
-  const editingPlayer = editingPlayerId
-    ? gameState.players.find(p => p.id === editingPlayerId)
-    : null;
-  const targetPlayer = editingPlayer ?? currentPlayer;
-  const isEditing = !!editingPlayer;
+  // Memoize derived state — this panel re-renders on every server broadcast,
+  // and these scans/filters compound across many players.
+  const derived = useMemo(() => {
+    const currentPlayer = gameState.players[gameState.currentTurnIndex];
+    const editingPlayer = editingPlayerId
+      ? gameState.players.find(p => p.id === editingPlayerId)
+      : null;
+    const targetPlayer = editingPlayer ?? currentPlayer;
+    const isEditing = !!editingPlayer;
+
+    const targetIdx = targetPlayer ? gameState.players.findIndex(p => p.id === targetPlayer.id) : -1;
+    const isTargetDealer = targetIdx === gameState.dealerIndex;
+
+    let otherBidsCount = 0;
+    let totalBidPlaced = 0;
+    const otherBids: number[] = [];
+    for (const p of gameState.players) {
+      if (p.bid === null) continue;
+      totalBidPlaced += p.bid;
+      if (p.id !== targetPlayer?.id) {
+        otherBids.push(p.bid);
+        otherBidsCount++;
+      }
+    }
+
+    const othersAllBid = !!targetPlayer && otherBidsCount === gameState.players.length - 1;
+    const blockedBid = isTargetDealer && othersAllBid
+      ? getBlockedBid(gameState.cardsPerRound, otherBids)
+      : null;
+
+    return { currentPlayer, targetPlayer, isEditing, isTargetDealer, blockedBid, totalBidPlaced };
+  }, [gameState.players, gameState.currentTurnIndex, gameState.dealerIndex, gameState.cardsPerRound, editingPlayerId]);
+
+  const { currentPlayer, targetPlayer, isEditing, isTargetDealer, blockedBid, totalBidPlaced } = derived;
 
   const canBid = isInPerson ? isHost && !isSpectator : gameState.currentTurnIndex === gameState.myIndex;
 
-  // Hook rule applies to the dealer. When editing, use the dealer-bid scenario
-  // for the target player only if they ARE the dealer.
-  const targetIdx = targetPlayer ? gameState.players.findIndex(p => p.id === targetPlayer.id) : -1;
-  const isTargetDealer = targetIdx === gameState.dealerIndex;
-  const otherBids = gameState.players
-    .filter((p) => p.id !== targetPlayer?.id && p.bid !== null)
-    .map((p) => p.bid!);
-  const othersAllBid = targetPlayer && otherBids.length === gameState.players.length - 1;
-  const blockedBid = isTargetDealer && othersAllBid
-    ? getBlockedBid(gameState.cardsPerRound, otherBids)
-    : null;
-
-  const bidsPlaced = gameState.players
-    .filter((p) => p.bid !== null)
-    .map((p) => p.bid!);
+  const bidButtons = useMemo(
+    () => Array.from({ length: gameState.cardsPerRound + 1 }, (_, i) => i),
+    [gameState.cardsPerRound],
+  );
 
   const headline = isInPerson
     ? (targetPlayer ? `${targetPlayer.name}'s bid${isEditing ? ' (edit)' : ''}` : 'Bidding')
@@ -122,14 +137,14 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
       {/* Running tally */}
       <div className="text-center text-xs mb-3">
         <span className="text-white/40">Total bid: </span>
-        <span className="font-bold text-white/80">{bidsPlaced.reduce((a, b) => a + b, 0)}</span>
+        <span className="font-bold text-white/80">{totalBidPlaced}</span>
         <span className="text-white/40"> / {gameState.cardsPerRound} tricks</span>
       </div>
 
       {canBid && targetPlayer && (
         <>
           <div className="flex flex-wrap justify-center gap-2 mb-3">
-            {Array.from({ length: gameState.cardsPerRound + 1 }, (_, i) => i).map((bid) => {
+            {bidButtons.map((bid) => {
               const isBlocked = bid === blockedBid;
               return (
                 <button
@@ -184,3 +199,5 @@ export default function BiddingPanel({ gameState, onPlaceBid, sound }: BiddingPa
     </div>
   );
 }
+
+export default memo(BiddingPanel);

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import type { ClientPlayer } from '@/lib/types';
 
 interface PlayerListProps {
@@ -8,15 +9,18 @@ interface PlayerListProps {
   phase: string;
 }
 
-export default function PlayerList({ players, myIndex, phase }: PlayerListProps) {
+function PlayerList({ players, myIndex, phase }: PlayerListProps) {
   // Reorder players so current player is last (bottom), others arranged around.
   // For spectators (myIndex < 0), show all players in natural order.
-  const reordered = myIndex < 0
-    ? players
-    : [
-        ...players.slice(myIndex + 1),
-        ...players.slice(0, myIndex),
-      ];
+  const reordered = useMemo(
+    () => (myIndex < 0
+      ? players
+      : [
+          ...players.slice(myIndex + 1),
+          ...players.slice(0, myIndex),
+        ]),
+    [players, myIndex],
+  );
 
   return (
     <div className="flex flex-wrap justify-center gap-2 px-2">
@@ -48,3 +52,5 @@ export default function PlayerList({ players, myIndex, phase }: PlayerListProps)
     </div>
   );
 }
+
+export default memo(PlayerList);
