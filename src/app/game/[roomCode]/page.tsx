@@ -136,7 +136,6 @@ export default function GamePage() {
           <TrickArea
             currentTrick={gameState.currentTrick}
             players={gameState.players}
-            myIndex={gameState.myIndex}
             trickWinner={gameState.trickWinner}
           />
         )}

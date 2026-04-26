@@ -35,6 +35,17 @@ function Card({ card, faceDown, selected, disabled, small, label, labelHighlight
     );
   }
 
+  // Stack rank + suit in the corner index (classic playing-card layout).
+  // When cards are overlapped in the hand, this thin left edge is the only
+  // part visible — including the suit symbol there is what lets you tell
+  // a 7♦ from a 7♣ at a glance.
+  const cornerIndex = (
+    <div className="flex flex-col items-center leading-none">
+      <span className="font-bold">{card.rank}</span>
+      <span className={small ? 'text-[11px]' : 'text-xs'}>{suitSymbol}</span>
+    </div>
+  );
+
   return (
     <div className="relative">
       {label && (
@@ -62,12 +73,12 @@ function Card({ card, faceDown, selected, disabled, small, label, labelHighlight
           transition-[transform,box-shadow,opacity] duration-150 select-none
           ${isRed ? 'text-red-600' : 'text-gray-900'}
           ${selected ? 'border-yellow-400 -translate-y-3 shadow-lg shadow-yellow-400/30' : 'border-gray-300'}
-          ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-1 hover:shadow-lg active:scale-95'}
+          ${disabled ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:-translate-y-1 hover:shadow-lg active:scale-95'}
         `}
       >
-        <div className="self-start font-bold leading-none">{card.rank}</div>
+        <div className="self-start">{cornerIndex}</div>
         <div className={`${small ? 'text-2xl' : 'text-3xl'} leading-none`}>{suitSymbol}</div>
-        <div className="self-end font-bold leading-none rotate-180">{card.rank}</div>
+        <div className="self-end rotate-180">{cornerIndex}</div>
       </button>
     </div>
   );
