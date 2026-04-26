@@ -13,30 +13,35 @@ const SUIT_SYMBOLS: Record<string, string> = {
   spades: '♠',
 };
 
-const SUIT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  hearts: { bg: 'bg-red-900/60', text: 'text-red-400', border: 'border-red-700/60' },
-  diamonds: { bg: 'bg-red-900/60', text: 'text-red-400', border: 'border-red-700/60' },
-  clubs: { bg: 'bg-gray-700/60', text: 'text-gray-200', border: 'border-gray-500/60' },
-  spades: { bg: 'bg-gray-700/60', text: 'text-gray-200', border: 'border-gray-500/60' },
-};
-
 export default function TrumpDisplay({ trumpCard }: TrumpDisplayProps) {
   if (!trumpCard) {
     return (
-      <div className="flex items-center gap-2 bg-gray-800/60 rounded-lg px-3 py-1.5">
-        <span className="text-white/60 text-xs font-medium">No Trump</span>
-      </div>
+      <span className="text-white/40 text-[10px] uppercase tracking-wider font-semibold">
+        No trump
+      </span>
     );
   }
 
-  const colors = SUIT_COLORS[trumpCard.suit];
+  const isRed = trumpCard.suit === 'hearts' || trumpCard.suit === 'diamonds';
+  const suitSymbol = SUIT_SYMBOLS[trumpCard.suit];
 
+  // Render as a tiny playing card (white face, suit-colored ink). Reads
+  // immediately as "the trump card" without needing the word "Trump"
+  // baked into the chip itself — the surrounding label handles that.
   return (
-    <div className={`flex items-center gap-1.5 ${colors.bg} border ${colors.border} rounded-lg px-3 py-1.5`}>
-      <span className="text-white/70 text-xs font-medium">Trump</span>
-      <div className={`flex items-center gap-0.5 ${colors.text} font-bold`}>
-        <span className="text-lg leading-none">{trumpCard.rank}</span>
-        <span className="text-xl leading-none">{SUIT_SYMBOLS[trumpCard.suit]}</span>
+    <div className="flex items-center gap-1.5">
+      <span className="text-white/50 text-[10px] uppercase tracking-wider font-semibold">
+        Trump
+      </span>
+      <div
+        className={`
+          flex items-center gap-0.5 bg-white border border-gray-300 rounded
+          px-1.5 py-0.5 shadow-sm
+          ${isRed ? 'text-red-600' : 'text-gray-900'}
+        `}
+      >
+        <span className="font-bold text-sm leading-none">{trumpCard.rank}</span>
+        <span className="text-base leading-none">{suitSymbol}</span>
       </div>
     </div>
   );
